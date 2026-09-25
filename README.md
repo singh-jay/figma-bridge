@@ -123,7 +123,28 @@ Replace the component path and target with real values from your project. Each r
 
 ## Project context
 
-Edit `figma-bridge.config.json`. It is safe to commit this configuration. Example:
+Save `figma-bridge.config.json` in your project root. It tells the agent where your code and design system live so it can implement Figma designs using your project's conventions. This configuration is safe to commit.
+
+### Configuration fields
+
+| Field | Meaning |
+| --- | --- |
+| `version` | Configuration format version; use `1`. |
+| `targets` | Named profiles for the apps or surfaces in your project. |
+| `web` | An example target name you choose; names such as `admin` or `mobile` also work. |
+| `root` | Target directory relative to the project root. Defaults to `"."`. |
+| `framework` | Your UI framework, such as `react`, `solid`, `vue` or `vanilla`. |
+| `language` | Your implementation language, such as `typescript` or `javascript`. |
+| `styling` | Your styling approach, such as `tailwind`, `css-modules` or `css`. |
+| `components` | Paths to existing component files or directories the agent should inspect and reuse. |
+| `tokens` | Paths to files defining theme values such as colors, spacing and typography. |
+| `guidance` | Paths to project instructions or design-system documentation. |
+
+All source paths in `components`, `tokens` and `guidance` are relative to the target's `root`. Use paths that exist in your project. Target fields are optional; omit references you do not have or use empty arrays. Missing references are reported as unavailable.
+
+### React with Tailwind
+
+For a project with components in `src/components`, theme CSS in `src/index.css`, and instructions in `AGENTS.md`:
 
 ```json
 {
@@ -131,20 +152,44 @@ Edit `figma-bridge.config.json`. It is safe to commit this configuration. Exampl
   "targets": {
     "web": {
       "root": ".",
-      "framework": "vue",
+      "framework": "react",
       "language": "typescript",
-      "styling": "css-modules",
+      "styling": "tailwind",
       "components": ["src/components"],
-      "tokens": ["src/styles/tokens.css"],
+      "tokens": ["src/index.css"],
       "guidance": ["AGENTS.md"]
     }
   }
 }
 ```
 
-Use any descriptive framework/styling strings; they are not a list of code generators. Profiles can describe multiple apps in a monorepo. `root` is relative to the project, and source paths are relative to that target root. References may point to shared packages inside the project, but may not escape its root. The schema is shipped at `schema/project.schema.json`.
+### Solid, Vue and vanilla JavaScript
 
-No configuration is required for Figma reads, supported edits or exports. `design_context` adds verified source references and reports missing/ambiguous project mappings. It does not infer component identity from a layer's name or color, and it does not automatically generate application code. The agent reads the supplied sources and follows that project's framework and behavior contracts.
+Use the same configuration structure and adjust the labels and paths for your project:
+
+| Stack                       | `framework` | `language`     | `styling`       |
+| --------------------------- | ----------- | -------------- | --------------- |
+| React with Tailwind         | `"react"`   | `"typescript"` | `"tailwind"`    |
+| Solid with Tailwind         | `"solid"`   | `"typescript"` | `"tailwind"`    |
+| React with CSS Modules      | `"react"`   | `"typescript"` | `"css-modules"` |
+| Vue with CSS Modules        | `"vue"`     | `"typescript"` | `"css-modules"` |
+| Vanilla JavaScript with CSS | `"vanilla"` | `"javascript"` | `"css"`         |
+
+Framework, language and styling values are descriptive strings, not a fixed list of code generators. Tailwind is a styling choice and can accompany React, Solid or another framework. Point `tokens` at the CSS or configuration files containing your actual theme definitions. For vanilla JavaScript, point `components` at the files or directories containing reusable DOM-rendering code; omit it if none exists. These example paths do not create files or install dependencies.
+
+### Choose a target in your prompt
+
+```text
+$figma-bridge Implement the selected Figma frame for the web target.
+Follow figma-bridge.config.json, reuse existing components and theme
+values, and verify the rendered result.
+```
+
+Replace `web` with a key from `targets`. A single configured target can be selected automatically; multiple targets require an explicit choice. The target selects your code conventions, not a Figma document.
+
+Profiles can describe multiple apps in a monorepo. For example, with `root: "apps/web"`, `components: ["src/components"]` points to `apps/web/src/components`, while `guidance: ["../../AGENTS.md"]` points to the project-root instructions. References may point to shared packages inside the project, but may not escape the project root. The schema is shipped at `schema/project.schema.json`.
+
+No configuration is required for Figma reads, supported edits or exports. `design_context` adds verified source references and reports missing or ambiguous project mappings. Source existence or similar layer names do not establish component identity. The bridge supplies design data and project references; the agent reads the actual sources and writes the implementation. This configuration does not install or change your framework, styling system or dependencies.
 
 Each MCP adapter receives an explicit `--project` path and keeps context local to that adapter. One shared service can therefore support multiple projects. The project target and the Figma session are independent selections.
 
