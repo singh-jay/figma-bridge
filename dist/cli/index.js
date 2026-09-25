@@ -7,7 +7,9 @@ import {
   readFileSync as readFileSync3,
   writeFileSync as writeFileSync3,
   cpSync,
-  realpathSync as realpathSync3
+  realpathSync as realpathSync3,
+  lstatSync as lstatSync2,
+  appendFileSync as appendFileSync2
 } from "node:fs";
 import { homedir } from "node:os";
 import { resolve as resolve3, join as join4 } from "node:path";
@@ -1347,10 +1349,24 @@ startup_timeout_sec = 20
 tool_timeout_sec = 120
 `
     );
+    const ignorePath = join4(project, ".gitignore");
+    let ignoreMessage = "Add .figma-bridge/ to your project's .gitignore.";
+    if (existsSync3(ignorePath)) {
+      if (!lstatSync2(ignorePath).isFile())
+        throw new Error("UNSAFE_GITIGNORE_FILE: expected a regular file");
+      const content = readFileSync3(ignorePath, "utf8");
+      const alreadyListed = content.split(/\r?\n/).some((line) => /^\/?\.figma-bridge\/?$/.test(line.trimEnd()));
+      if (!alreadyListed) {
+        const newline = content.includes("\r\n") ? "\r\n" : "\n";
+        const separator = content && !content.endsWith("\n") ? newline : "";
+        appendFileSync2(ignorePath, `${separator}.figma-bridge/${newline}`);
+      }
+      ignoreMessage = alreadyListed ? ".figma-bridge/ is already listed in .gitignore." : "Added .figma-bridge/ to .gitignore.";
+    }
     console.log(
       `Import ${join4(plugin, "manifest.json")} in Figma desktop.
 Merge ${join4(local, "mcp.json")} or ${join4(local, "codex.toml")} into your MCP client configuration.
-Add .figma-bridge/ to your project's .gitignore.
+${ignoreMessage}
 Edit ${configPath} for your framework, component, token and guidance paths.
 Then run figma-bridge start and figma-bridge pair.`
     );
