@@ -28,8 +28,8 @@ Unit/integration tests cover unknown reaction preservation, scoped starts, finge
 
 The installed Node package verifier covers eight successful/blocked/inconclusive outcome cases through the CLI, in addition to transport, routing and install checks. Unit tests cover explicit scenario expectations, incomplete/unsupported coverage, history-dependent exits, evidence coverage, stale sessions, duplicate checks and unsafe image paths.
 
-Browser/desktop automation and an authenticated player are required for playback. Advanced prototype features remain the plan’s later extensions. No paid-feature entitlement or cross-platform live acceptance is inferred from this macOS Free-account run.
+Browser/desktop automation and an authenticated player are required for playback. Advanced prototype features were later extensions at this release; see the subsequent [0.3 verification](advanced-prototype-verification.md). No paid-feature entitlement or cross-platform live acceptance is inferred from this macOS Free-account run.
 
-## Remaining integration prerequisite
+## Consumer integration completed after merge
 
-Omni Care remains pinned to its previously reviewed commit. The installation/documentation PR has merged; the prototype PR remains open. The plan requires a reviewed merged prototype commit before upgrading that consumer; the repository owner must merge that PR first. No branch protection or merge authority was changed.
+After the owner merged PR #2, Omni Care's root tooling dependency and customer-UI plugin dependency were upgraded to reviewed commit `2431fd44439b0b03bdaed0cbd0f5e28c88d6e7a3` (0.2). The lockfile, generated bridge plugin and installed personal skill were refreshed. The consumer plugin passed typecheck, 16 tests / 6,164 assertions, and build. The regular desktop plugin was paired again and the installed CLI verified protocol 2, a connected peer and all prototype tools/operations. Main branch protection and owner merge authority remain unchanged. The consumer stays on reviewed 0.2 while 0.3 is under review.

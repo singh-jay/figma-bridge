@@ -293,3 +293,33 @@ test("old plugins receive an actionable protocol mismatch and cannot register", 
   expect(closed.reason).toContain("init --force");
   expect((await call(await s.client(), "sessions")).sessions).toHaveLength(0);
 });
+
+test("advanced reactions require the actual peer feature advertisement", async () => {
+  const s = await setup();
+  const peer = await s.peer(undefined, ["apply"], ["upsert_reaction"]);
+  const client = await s.client();
+  expect(
+    (await call(client, "sessions")).sessions[0].prototypeFeatures
+  ).toEqual([]);
+  expect(
+    (
+      await call(client, "apply", {
+        sessionId: peer.sessionId,
+        generation: peer.generation,
+        leaseId: "l",
+        operationId: crypto.randomUUID(),
+        operations: [
+          {
+            type: "upsert_reaction",
+            nodeId: "n",
+            expectedFingerprint: "fp",
+            reaction: {
+              trigger: { type: "ON_HOVER" },
+              actions: [{ type: "BACK" }],
+            },
+          },
+        ],
+      })
+    ).error
+  ).toBe("UNSUPPORTED_PEER_PROTOTYPE_FEATURE");
+});

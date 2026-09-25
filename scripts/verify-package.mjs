@@ -270,6 +270,15 @@ try {
             documentName: file,
             capabilities: Object.keys(tools),
             operations: SUPPORTED_OPERATIONS,
+            prototypeFeatures: [
+              "advanced_triggers",
+              "smart_animate",
+              "change_to",
+              "multiple_actions",
+              "variable_actions",
+              "expressions",
+              "conditionals",
+            ],
           })
         )
       );
@@ -432,6 +441,46 @@ try {
   assert.equal((await call(ca, "apply", args)).status, "complete");
   assert.equal((await call(ca, "apply", args)).created.qa, "A:1");
   assert.equal(creates, 1);
+  assert(
+    sessions.sessions.every((peer) =>
+      peer.prototypeFeatures.includes("conditionals")
+    )
+  );
+  assert.equal(
+    (
+      await call(ca, "apply", {
+        ...args,
+        operationId: crypto.randomUUID(),
+        operations: [
+          {
+            type: "upsert_reaction",
+            nodeId: "root",
+            expectedFingerprint: "before",
+            reaction: {
+              trigger: { type: "AFTER_TIMEOUT", timeout: 1.5 },
+              actions: [
+                {
+                  type: "CONDITIONAL",
+                  conditionalBlocks: [
+                    {
+                      condition: {
+                        type: "BOOLEAN",
+                        resolvedType: "BOOLEAN",
+                        value: true,
+                      },
+                      actions: [{ type: "BACK" }],
+                    },
+                    { actions: [{ type: "CLOSE" }] },
+                  ],
+                },
+              ],
+            },
+          },
+        ],
+      })
+    ).status,
+    "complete"
+  );
   assert.equal(
     (
       await call(ca, "operation_status", {

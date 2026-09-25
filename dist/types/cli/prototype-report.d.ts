@@ -2,6 +2,7 @@ import * as v from "valibot";
 declare const stepSchema: v.LooseObjectSchema<{
     readonly sourceId: v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>;
     readonly reactionIndex: v.SchemaWithPipe<readonly [v.NumberSchema<undefined>, v.IntegerAction<number, undefined>, v.MinValueAction<number, 0, undefined>]>;
+    readonly actionPath: v.OptionalSchema<v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>, undefined>;
     readonly actionIndex: v.SchemaWithPipe<readonly [v.NumberSchema<undefined>, v.IntegerAction<number, undefined>, v.MinValueAction<number, 0, undefined>]>;
 }, undefined>;
 export declare const prototypeReportSchema: v.StrictObjectSchema<{
@@ -18,10 +19,12 @@ export declare const prototypeReportSchema: v.StrictObjectSchema<{
         readonly steps: v.SchemaWithPipe<readonly [v.ArraySchema<v.LooseObjectSchema<{
             readonly sourceId: v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>;
             readonly reactionIndex: v.SchemaWithPipe<readonly [v.NumberSchema<undefined>, v.IntegerAction<number, undefined>, v.MinValueAction<number, 0, undefined>]>;
+            readonly actionPath: v.OptionalSchema<v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>, undefined>;
             readonly actionIndex: v.SchemaWithPipe<readonly [v.NumberSchema<undefined>, v.IntegerAction<number, undefined>, v.MinValueAction<number, 0, undefined>]>;
         }, undefined>, undefined>, v.MaxLengthAction<({
             sourceId: string;
             reactionIndex: number;
+            actionPath?: string | undefined;
             actionIndex: number;
         } & {
             [key: string]: unknown;

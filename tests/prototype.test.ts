@@ -320,14 +320,14 @@ test("playback preparation never claims execution or verified document identity"
   ).rejects.toThrow("START_NOT_IN_INSPECTED_FLOW");
 });
 
-test("prototype schemas reject multi-actions, arbitrary patches and unconfirmed create references", async () => {
+test("prototype schemas reject excessive actions, arbitrary patches and unconfirmed create references", async () => {
   const f = fixture();
   for (const operation of [
     f.operation(f.button, {
       type: "upsert_reaction",
       reaction: {
         trigger: { type: "ON_CLICK" },
-        actions: [{ type: "BACK" }, { type: "CLOSE" }],
+        actions: Array.from({ length: 17 }, () => ({ type: "BACK" })),
       },
     }),
     f.operation(f.a, {
@@ -520,3 +520,659 @@ for (const method of ["validate_prototype", "prepare_prototype_playback"]) {
     });
   }
 }
+
+const boolValue = (value: boolean) => ({
+  type: "BOOLEAN",
+  resolvedType: "BOOLEAN",
+  value,
+});
+function prototypeVariables(f: ReturnType<typeof fixture>) {
+  const variable = {
+    id: "VariableID:qa",
+    name: "qa",
+    resolvedType: "BOOLEAN",
+    remote: false,
+    variableCollectionId: "collection:qa",
+    valuesByMode: { default: false },
+  };
+  const collection = {
+    id: "collection:qa",
+    name: "QA",
+    remote: false,
+    modes: [
+      { modeId: "default", name: "Default" },
+      { modeId: "alternate", name: "Alternate" },
+    ],
+    defaultModeId: "default",
+  };
+  Object.assign(f.api.variables, {
+    getVariableByIdAsync: async (id: string) =>
+      id === variable.id ? variable : null,
+    getVariableCollectionByIdAsync: async (id: string) =>
+      id === collection.id ? collection : null,
+  });
+  return { variable, collection };
+}
+test("advanced triggers and Smart Animate retain timing and input metadata in readback", async () => {
+  const f = fixture();
+  for (const trigger of [
+    { type: "ON_HOVER" },
+    { type: "ON_DRAG" },
+    { type: "ON_PRESS" },
+    { type: "ON_KEY_DOWN", device: "KEYBOARD", keyCodes: [16, 65] },
+    { type: "AFTER_TIMEOUT", timeout: 0.8 },
+    { type: "MOUSE_ENTER", delay: 0.1, deprecatedVersion: false },
+  ]) {
+    const reaction = nav(f.b.id) as any;
+    reaction.trigger = trigger;
+    reaction.actions[0].transition = {
+      type: "SMART_ANIMATE",
+      duration: 0.4,
+      easing: { type: "GENTLE" },
+    };
+    expect(
+      (
+        await f.apply([
+          f.operation(f.button, { type: "upsert_reaction", reaction }),
+        ])
+      ).status
+    ).toBe("complete");
+  }
+  const flow = (await f.engine.dispatch("prepare_prototype_playback", {
+    ...f.read(),
+    startNodeId: f.a.id,
+  })) as any;
+  expect(flow.readyForPlayback).toBe(true);
+  expect(flow.steps[3].trigger.keyCodes).toEqual([16, 65]);
+  expect(flow.steps[4].trigger.timeout).toBe(0.8);
+  expect(flow.steps[0].action.transition.type).toBe("SMART_ANIMATE");
+});
+test("conditional actions validate references recursively and emit unique branch checks", async () => {
+  const f = fixture();
+  const { variable } = prototypeVariables(f);
+  const condition = {
+    type: "VARIABLE_ALIAS",
+    resolvedType: "BOOLEAN",
+    value: { type: "VARIABLE_ALIAS", id: variable.id },
+  };
+  const reaction = {
+    trigger: { type: "ON_CLICK" },
+    actions: [
+      {
+        type: "SET_VARIABLE",
+        variableId: variable.id,
+        variableValue: boolValue(true),
+      },
+      {
+        type: "CONDITIONAL",
+        conditionalBlocks: [
+          { condition, actions: nav(f.b.id).actions },
+          {
+            actions: [
+              {
+                type: "SET_VARIABLE",
+                variableId: variable.id,
+                variableValue: boolValue(false),
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+  expect(
+    (
+      await f.apply([
+        f.operation(f.button, { type: "upsert_reaction", reaction }),
+      ])
+    ).status
+  ).toBe("complete");
+  const graph = (await f.engine.dispatch("prepare_prototype_playback", {
+    ...f.read({
+      scenario: { startNodeId: f.a.id, expectedScreenIds: [f.b.id] },
+    }),
+    startNodeId: f.a.id,
+  })) as any;
+  expect(graph.structuralStatus).toBe("valid");
+  expect(graph.scenarioStatus).toBe("requires_playback");
+  expect(
+    graph.steps
+      .filter((s: any) => s.type === "CONDITIONAL_BRANCH")
+      .map((s: any) => s.actionPath)
+  ).toEqual(["1/branch/0", "1/branch/1"]);
+  expect(graph.steps.some((s: any) => s.destinationId === f.b.id)).toBe(true);
+  const before = graph.flowFingerprint;
+  variable.valuesByMode.default = true;
+  expect(
+    (
+      (await f.engine.dispatch("prepare_prototype_playback", {
+        ...f.read({
+          scenario: { startNodeId: f.a.id, expectedScreenIds: [f.b.id] },
+        }),
+        startNodeId: f.a.id,
+      })) as any
+    ).flowFingerprint
+  ).not.toBe(before);
+  reaction.actions[1] = {
+    type: "CONDITIONAL",
+    conditionalBlocks: [{ condition, actions: nav("missing").actions }],
+  } as any;
+  expect(
+    (
+      await f.apply([
+        f.operation(f.button, { type: "upsert_reaction", reaction }),
+      ])
+    ).error
+  ).toBe("PROTOTYPE_NODE_NOT_FOUND");
+});
+test("expressions and variable modes enforce type, arity, availability and mode membership", async () => {
+  const f = fixture();
+  const { variable, collection } = prototypeVariables(f);
+  const applyActions = (actions: unknown[]) =>
+    f.apply([
+      f.operation(f.button, {
+        type: "upsert_reaction",
+        reaction: { trigger: { type: "ON_CLICK" }, actions },
+      }),
+    ]);
+  const assign = (value: unknown) => ({
+    type: "SET_VARIABLE",
+    variableId: variable.id,
+    variableValue: value,
+  });
+  expect(
+    (
+      await applyActions([
+        assign({
+          type: "EXPRESSION",
+          resolvedType: "BOOLEAN",
+          value: {
+            expressionFunction: "NOT",
+            expressionArguments: [boolValue(true)],
+          },
+        }),
+        {
+          type: "SET_VARIABLE_MODE",
+          variableCollectionId: collection.id,
+          variableModeId: "alternate",
+        },
+      ])
+    ).status
+  ).toBe("complete");
+  expect(
+    (
+      await applyActions([
+        assign({ type: "FLOAT", resolvedType: "FLOAT", value: 4 }),
+      ])
+    ).error
+  ).toBe("PROTOTYPE_VALUE_TYPE_MISMATCH");
+  expect(
+    (
+      await applyActions([
+        assign({
+          type: "EXPRESSION",
+          resolvedType: "BOOLEAN",
+          value: {
+            expressionFunction: "AND",
+            expressionArguments: [boolValue(true)],
+          },
+        }),
+      ])
+    ).error
+  ).toBe("EXPRESSION_ARITY_MISMATCH");
+  expect(
+    (
+      await applyActions([
+        {
+          type: "SET_VARIABLE_MODE",
+          variableCollectionId: collection.id,
+          variableModeId: "missing",
+        },
+      ])
+    ).error
+  ).toBe("PROTOTYPE_MODE_NOT_FOUND");
+  expect(
+    (
+      await applyActions([
+        {
+          type: "CONDITIONAL",
+          conditionalBlocks: [
+            {
+              condition: { type: "FLOAT", resolvedType: "FLOAT", value: 1 },
+              actions: [{ type: "BACK" }],
+            },
+          ],
+        },
+      ])
+    ).error
+  ).toBe("CONDITION_MUST_BE_BOOLEAN");
+  variable.remote = true;
+  expect((await applyActions([assign(boolValue(false))])).error).toBe(
+    "PROTOTYPE_VARIABLE_UNAVAILABLE"
+  );
+});
+test("change-to permits only variants in the source component set", async () => {
+  const f = fixture();
+  const set = f.make("Set");
+  set.type = "COMPONENT_SET";
+  const first = f.make("Default", set);
+  first.type = "COMPONENT";
+  const next = f.make("Hover", set);
+  next.type = "COMPONENT";
+  const nested = f.make("Button", first);
+  const reaction = nav(next.id) as any;
+  reaction.actions[0].navigation = "CHANGE_TO";
+  expect(
+    (
+      await f.apply([
+        f.operation(nested, { type: "upsert_reaction", reaction }),
+      ])
+    ).status
+  ).toBe("complete");
+  expect(
+    (
+      (await f.engine.dispatch(
+        "validate_prototype",
+        f.read({ nodeIds: [set.id] })
+      )) as any
+    ).structuralStatus
+  ).toBe("valid");
+  reaction.actions[0].destinationId = f.b.id;
+  expect(
+    (
+      await f.apply([
+        f.operation(nested, { type: "upsert_reaction", reaction }),
+      ])
+    ).error
+  ).toBe("CHANGE_TO_REQUIRES_SIBLING_VARIANT");
+});
+test("advanced schemas reject excess nesting, invalid inputs and misplaced else", () => {
+  const f = fixture();
+  const check = (reaction: unknown) => {
+    const { rootId, ...payload } = f.request([
+      f.operation(f.button, { type: "upsert_reaction", reaction }),
+    ]);
+    expect(() => parse(tools.apply.schema, payload)).toThrow();
+  };
+  for (const trigger of [
+    { type: "AFTER_TIMEOUT", timeout: -1 },
+    { type: "ON_KEY_DOWN", device: "KEYBOARD", keyCodes: [65, 65] },
+    { type: "ON_KEY_DOWN", device: "KEYBOARD", keyCodes: [] },
+  ])
+    check({ trigger, actions: [{ type: "BACK" }] });
+  let actions: any[] = [{ type: "BACK" }];
+  for (let i = 0; i < 4; i++)
+    actions = [
+      {
+        type: "CONDITIONAL",
+        conditionalBlocks: [{ condition: boolValue(true), actions }],
+      },
+    ];
+  check({ trigger: { type: "ON_CLICK" }, actions });
+  check({
+    trigger: { type: "ON_CLICK" },
+    actions: [
+      {
+        type: "CONDITIONAL",
+        conditionalBlocks: [
+          { actions: [{ type: "BACK" }] },
+          { condition: boolValue(true), actions: [{ type: "BACK" }] },
+        ],
+      },
+    ],
+  });
+});
+
+test("variable dependency changes during awaited reads prevent complete validation", async () => {
+  const f = fixture();
+  const { variable, collection } = prototypeVariables(f);
+  f.button.reactions = [
+    {
+      trigger: { type: "ON_CLICK" },
+      actions: [
+        {
+          type: "SET_VARIABLE",
+          variableId: variable.id,
+          variableValue: boolValue(true),
+        },
+      ],
+    },
+  ];
+  f.api.variables.getVariableCollectionByIdAsync = async () => {
+    variable.valuesByMode.default = true;
+    return collection;
+  };
+  const result = (await f.engine.dispatch(
+    "validate_prototype",
+    f.read()
+  )) as any;
+  expect(result.complete).toBe(false);
+  expect(result.structuralStatus).toBe("inconclusive");
+  expect(
+    result.issues.some(
+      (issue: any) => issue.code === "PROTOTYPE_RESOURCE_CHANGED"
+    )
+  ).toBe(true);
+});
+
+test("default variable aliases affect fingerprints and cyclic aliases are rejected", async () => {
+  const f = fixture();
+  const { variable } = prototypeVariables(f);
+  const alias = {
+    ...variable,
+    id: "VariableID:alias",
+    valuesByMode: { default: false },
+  };
+  (variable.valuesByMode as any).default = {
+    type: "VARIABLE_ALIAS",
+    id: alias.id,
+  };
+  f.api.variables.getVariableByIdAsync = async (id: string) =>
+    id === variable.id ? variable : id === alias.id ? alias : null;
+  const reaction = {
+    trigger: { type: "ON_CLICK" },
+    actions: [
+      {
+        type: "SET_VARIABLE",
+        variableId: variable.id,
+        variableValue: boolValue(true),
+      },
+    ],
+  };
+  expect(
+    (
+      await f.apply([
+        f.operation(f.button, { type: "upsert_reaction", reaction }),
+      ])
+    ).status
+  ).toBe("complete");
+  const before = (await f.engine.dispatch("read_prototype", f.read())) as any;
+  expect(before.dependencies.some((item: any) => item.id === alias.id)).toBe(
+    true
+  );
+  alias.valuesByMode.default = true;
+  const after = (await f.engine.dispatch("read_prototype", f.read())) as any;
+  expect(after.flowFingerprint).not.toBe(before.flowFingerprint);
+  (alias.valuesByMode as any).default = {
+    type: "VARIABLE_ALIAS",
+    id: variable.id,
+  };
+  expect(
+    (
+      await f.apply([
+        f.operation(f.button, { type: "upsert_reaction", reaction }),
+      ])
+    ).error
+  ).toBe("PROTOTYPE_VARIABLE_ALIAS_CYCLE");
+});
+
+test("mouse enter/leave writes omit the legacy deprecatedVersion setter field", async () => {
+  const f = fixture();
+  f.button.setReactionsAsync = async (reactions: any[]) => {
+    if (reactions.some((reaction) => "deprecatedVersion" in reaction.trigger))
+      throw new Error("Native setter rejects legacy trigger fields");
+    f.button.reactions = reactions;
+  };
+  for (const type of ["MOUSE_ENTER", "MOUSE_LEAVE"]) {
+    const reaction = {
+      trigger: { type, delay: 0.1, deprecatedVersion: false },
+      actions: nav(f.b.id).actions,
+    };
+    expect(
+      (
+        await f.apply([
+          f.operation(f.button, { type: "upsert_reaction", reaction }),
+        ])
+      ).status
+    ).toBe("complete");
+  }
+  expect(f.button.reactions.map((reaction: any) => reaction.trigger)).toEqual([
+    { type: "MOUSE_ENTER", delay: 0.1 },
+    { type: "MOUSE_LEAVE", delay: 0.1 },
+  ]);
+});
+
+function variantFixture(f: ReturnType<typeof fixture>, separatePage = false) {
+  const page = separatePage ? f.api.createPage() : f.page;
+  const set = f.make("States", page);
+  set.type = "COMPONENT_SET";
+  const first = f.make("Default", set);
+  first.type = "COMPONENT";
+  const next = f.make("Active", set);
+  next.type = "COMPONENT";
+  const instance = f.make("Control", f.a);
+  instance.type = "INSTANCE";
+  instance.mainComponent = first;
+  const nested = f.make("Target content", next);
+  const reaction = nav(next.id) as any;
+  reaction.actions[0].navigation = "CHANGE_TO";
+  return { page, set, first, next, instance, nested, reaction };
+}
+
+for (const kind of ["conditional", "variant"]) {
+  test(`${kind} runtime paths do not hide definite scenario failures or permit passing evidence`, async () => {
+    const f = fixture();
+    if (kind === "conditional") {
+      f.button.reactions = [
+        {
+          trigger: { type: "ON_CLICK" },
+          actions: [
+            {
+              type: "CONDITIONAL",
+              conditionalBlocks: [
+                { condition: boolValue(true), actions: nav(f.b.id).actions },
+              ],
+            },
+          ],
+        },
+      ];
+    } else {
+      const v = variantFixture(f);
+      v.instance.reactions = [v.reaction];
+      v.nested.reactions = [nav(f.b.id)];
+    }
+    for (const method of ["validate_prototype", "prepare_prototype_playback"]) {
+      const graph = (await f.engine.dispatch(
+        method,
+        f.read({
+          nodeIds: [f.a.id, f.overlay.id],
+          ...(method === "prepare_prototype_playback"
+            ? { startNodeId: f.a.id }
+            : {}),
+          scenario: {
+            startNodeId: f.a.id,
+            expectedScreenIds: [f.b.id, f.overlay.id],
+            requireExitNodeIds: [f.b.id],
+          },
+        })
+      )) as any;
+      expect(graph.complete).toBe(true);
+      expect(graph.scenarioStatus).toBe("warnings");
+      expect(graph.issues).toContainEqual({
+        severity: "warning",
+        code: "UNREACHABLE_SCREEN",
+        nodeId: f.overlay.id,
+      });
+      expect(graph.issues).toContainEqual({
+        severity: "warning",
+        code: "MISSING_EXIT_PATH",
+        nodeId: f.b.id,
+      });
+      expect(
+        graph.issues.some(
+          (i: any) => i.code === "UNREACHABLE_SCREEN" && i.nodeId === f.b.id
+        )
+      ).toBe(false);
+      if (method === "prepare_prototype_playback") {
+        const { evaluatePrototypeRun, interactionCheckId } =
+          await import("../src/cli/prototype-report");
+        const result = evaluatePrototypeRun({
+          prepared: graph,
+          after: graph,
+          environment: {
+            controllerAvailable: true,
+            authenticated: true,
+            pluginConnected: true,
+            documentIdentity: "confirmed",
+            observedStartNodeId: f.a.id,
+            viewport: { width: 800, height: 600 },
+          },
+          requiredChecks: [],
+          checks: graph.steps.map((step: any) => ({
+            id: interactionCheckId(step),
+            action: "Exercise edge",
+            expected: "Edge effect",
+            observed: "Edge effect",
+            status: "passed",
+            observedAt: new Date().toISOString(),
+            screenshots: ["fixture.png"],
+          })),
+        });
+        expect(result.status).toBe("inconclusive");
+        expect(result.reasons).toContain("STRUCTURE_NOT_VERIFIED");
+      }
+    }
+  });
+}
+
+test("variant-state paths conservatively provide reachability and exits but still need playback", async () => {
+  const f = fixture();
+  const v = variantFixture(f);
+  v.instance.reactions = [v.reaction];
+  v.nested.reactions = [nav(f.b.id)];
+  const graph = (await f.engine.dispatch(
+    "validate_prototype",
+    f.read({
+      scenario: {
+        startNodeId: f.a.id,
+        expectedScreenIds: [f.b.id],
+        requireExitNodeIds: [f.a.id],
+      },
+    })
+  )) as any;
+  expect(graph.scenarioStatus).toBe("requires_playback");
+  expect(
+    graph.issues.some((i: any) =>
+      ["UNREACHABLE_SCREEN", "MISSING_EXIT_PATH"].includes(i.code)
+    )
+  ).toBe(false);
+});
+
+test("cross-page instance variants support guarded writes and bounded readback without allowing cross-page navigation", async () => {
+  const f = fixture();
+  const v = variantFixture(f, true);
+  const source = f.make("Instance child", v.instance);
+  const unrelated = f.make("Unrelated definition", v.page);
+  for (const node of [v.instance, source]) {
+    expect(
+      (
+        await f.apply([
+          f.operation(node, { type: "upsert_reaction", reaction: v.reaction }),
+        ])
+      ).status
+    ).toBe("complete");
+  }
+  const read = f.read({ scenario: { startNodeId: f.a.id } });
+  for (const method of [
+    "read_prototype",
+    "validate_prototype",
+    "prepare_prototype_playback",
+  ]) {
+    const graph = (await f.engine.dispatch(method, {
+      ...read,
+      ...(method === "prepare_prototype_playback"
+        ? { startNodeId: f.a.id }
+        : {}),
+    })) as any;
+    expect(graph.complete).toBe(true);
+    expect(graph.scenarioStatus).toBe("requires_playback");
+    expect(graph.issues.some((i: any) => i.severity === "error")).toBe(false);
+    if (graph.nodes) {
+      expect(graph.nodes.some((n: any) => n.id === v.nested.id)).toBe(true);
+      expect(graph.nodes.some((n: any) => n.id === unrelated.id)).toBe(false);
+    }
+  }
+  const limited = (await f.engine.dispatch(
+    "read_prototype",
+    f.read({ traverseDestinations: false })
+  )) as any;
+  expect(limited.complete).toBe(false);
+  expect(limited.pendingNodeIds).toContain(v.next.id);
+  const budget = (await f.engine.dispatch(
+    "read_prototype",
+    f.read({ maxNodes: 3 })
+  )) as any;
+  expect(budget.complete).toBe(false);
+  for (const navigation of ["NAVIGATE", "OVERLAY"]) {
+    const reaction = nav(unrelated.id) as any;
+    reaction.actions[0].navigation = navigation;
+    expect(
+      (
+        await f.apply([
+          f.operation(source, { type: "upsert_reaction", reaction }),
+        ])
+      ).error
+    ).toBe("PROTOTYPE_CROSS_PAGE");
+    const saved = source.reactions;
+    source.reactions = [reaction];
+    const graph = (await f.engine.dispatch(
+      "validate_prototype",
+      f.read()
+    )) as any;
+    expect(graph.structuralStatus).toBe("invalid");
+    expect(
+      graph.issues.some((i: any) => i.code === "CROSS_PAGE_DESTINATION")
+    ).toBe(true);
+    source.reactions = saved;
+  }
+  const wrong = nav(unrelated.id) as any;
+  wrong.actions[0].navigation = "CHANGE_TO";
+  expect(
+    (
+      await f.apply([
+        f.operation(source, { type: "upsert_reaction", reaction: wrong }),
+      ])
+    ).error
+  ).toBe("CHANGE_TO_REQUIRES_SIBLING_VARIANT");
+  const outside = (await f.engine.dispatch(
+    "validate_prototype",
+    f.read({ nodeIds: [unrelated.id] })
+  )) as any;
+  expect(outside.structuralStatus).toBe("invalid");
+  expect(
+    outside.issues.some((i: any) => i.code === "OUTSIDE_PROTOTYPE_PAGE")
+  ).toBe(true);
+});
+
+test("unrelated runtime interactions do not make a static scenario require playback", async () => {
+  const f = fixture();
+  f.button.reactions = [nav(f.b.id)];
+  f.overlay.reactions = [
+    {
+      trigger: { type: "ON_CLICK" },
+      actions: [
+        {
+          type: "CONDITIONAL",
+          conditionalBlocks: [
+            { condition: boolValue(true), actions: nav(f.b.id).actions },
+          ],
+        },
+      ],
+    },
+  ];
+  const graph = (await f.engine.dispatch(
+    "validate_prototype",
+    f.read({
+      nodeIds: [f.a.id, f.overlay.id],
+      scenario: {
+        startNodeId: f.a.id,
+        expectedScreenIds: [f.b.id],
+        requireExitNodeIds: [f.a.id],
+      },
+    })
+  )) as any;
+  expect(graph.scenarioStatus).toBe("satisfied");
+  expect(
+    graph.issues.some((i: any) => i.code === "SCENARIO_REQUIRES_RUNTIME_STATE")
+  ).toBe(false);
+});

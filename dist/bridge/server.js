@@ -27,31 +27,212 @@ var id = v.pipe(v.string(), v.minLength(1), v.maxLength(200));
 var realId = v.pipe(id, v.regex(/^[^$]/, "Use confirmed node IDs"));
 var index = v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(999));
 var guarded = { nodeId: realId, expectedFingerprint: id };
+var seconds = v.pipe(v.number(), v.minValue(0), v.maxValue(10));
+var triggerSeconds = v.pipe(
+  v.number(),
+  v.minValue(0),
+  v.maxValue(60),
+  v.description(
+    "Seconds in the native Plugin API; 1.5 is 1500ms in the Figma editor"
+  )
+);
 var transition = v.nullable(
   v.strictObject({
-    type: v.literal("DISSOLVE"),
-    duration: v.pipe(v.number(), v.finite(), v.minValue(0), v.maxValue(10)),
+    type: v.picklist(["DISSOLVE", "SMART_ANIMATE"]),
+    duration: seconds,
     easing: v.strictObject({
-      type: v.picklist(["LINEAR", "EASE_IN", "EASE_OUT", "EASE_IN_AND_OUT"])
+      type: v.picklist([
+        "LINEAR",
+        "EASE_IN",
+        "EASE_OUT",
+        "EASE_IN_AND_OUT",
+        "EASE_IN_BACK",
+        "EASE_OUT_BACK",
+        "EASE_IN_AND_OUT_BACK",
+        "GENTLE",
+        "QUICK",
+        "BOUNCY",
+        "SLOW"
+      ])
     })
   })
 );
-var prototypeActionSchema = v.variant("type", [
-  v.strictObject({ type: v.literal("BACK") }),
-  v.strictObject({ type: v.literal("CLOSE") }),
+var triggerSchema = v.variant("type", [
   v.strictObject({
-    type: v.literal("NODE"),
-    destinationId: realId,
-    navigation: v.picklist(["NAVIGATE", "OVERLAY"]),
-    transition,
-    resetScrollPosition: v.optional(v.boolean(), true),
-    resetVideoPosition: v.optional(v.boolean(), false)
+    type: v.picklist(["ON_CLICK", "ON_HOVER", "ON_PRESS", "ON_DRAG"])
+  }),
+  v.strictObject({ type: v.literal("AFTER_TIMEOUT"), timeout: triggerSeconds }),
+  v.strictObject({
+    type: v.picklist(["MOUSE_UP", "MOUSE_DOWN"]),
+    delay: triggerSeconds
+  }),
+  v.strictObject({
+    type: v.picklist(["MOUSE_ENTER", "MOUSE_LEAVE"]),
+    delay: triggerSeconds,
+    deprecatedVersion: v.optional(v.literal(false), false)
+  }),
+  v.strictObject({
+    type: v.literal("ON_KEY_DOWN"),
+    device: v.literal("KEYBOARD"),
+    keyCodes: v.pipe(
+      v.array(v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(255))),
+      v.minLength(1),
+      v.maxLength(4),
+      v.check((keys) => new Set(keys).size === keys.length, "Duplicate keys")
+    )
   })
 ]);
-var reactionSchema = v.strictObject({
-  trigger: v.strictObject({ type: v.literal("ON_CLICK") }),
-  actions: v.pipe(v.array(prototypeActionSchema), v.length(1))
-});
+var resolved = v.picklist(["BOOLEAN", "FLOAT", "STRING", "COLOR"]);
+var channel = v.pipe(v.number(), v.minValue(0), v.maxValue(1));
+function valueSchema(depth) {
+  const literals = [
+    v.strictObject({
+      type: v.literal("BOOLEAN"),
+      resolvedType: v.literal("BOOLEAN"),
+      value: v.boolean()
+    }),
+    v.strictObject({
+      type: v.literal("FLOAT"),
+      resolvedType: v.literal("FLOAT"),
+      value: v.pipe(v.number(), v.minValue(-1e12), v.maxValue(1e12))
+    }),
+    v.strictObject({
+      type: v.literal("STRING"),
+      resolvedType: v.literal("STRING"),
+      value: v.pipe(v.string(), v.maxLength(4096))
+    }),
+    v.strictObject({
+      type: v.literal("COLOR"),
+      resolvedType: v.literal("COLOR"),
+      value: v.strictObject({
+        r: channel,
+        g: channel,
+        b: channel,
+        a: v.optional(channel)
+      })
+    }),
+    v.strictObject({
+      type: v.literal("VARIABLE_ALIAS"),
+      resolvedType: resolved,
+      value: v.strictObject({ type: v.literal("VARIABLE_ALIAS"), id: realId })
+    })
+  ];
+  if (!depth) return v.union(literals);
+  return v.union([
+    ...literals,
+    v.strictObject({
+      type: v.literal("EXPRESSION"),
+      resolvedType: resolved,
+      value: v.strictObject({
+        expressionFunction: v.picklist([
+          "ADDITION",
+          "SUBTRACTION",
+          "MULTIPLICATION",
+          "DIVISION",
+          "EQUALS",
+          "NOT_EQUAL",
+          "LESS_THAN",
+          "LESS_THAN_OR_EQUAL",
+          "GREATER_THAN",
+          "GREATER_THAN_OR_EQUAL",
+          "AND",
+          "OR",
+          "NEGATE",
+          "NOT"
+        ]),
+        expressionArguments: v.pipe(
+          v.array(valueSchema(depth - 1)),
+          v.minLength(1),
+          v.maxLength(2)
+        )
+      })
+    })
+  ]);
+}
+var prototypeValueSchema = valueSchema(4);
+function actionSchema(depth) {
+  const leaves = [
+    v.strictObject({ type: v.picklist(["BACK", "CLOSE"]) }),
+    v.strictObject({
+      type: v.literal("NODE"),
+      destinationId: realId,
+      navigation: v.picklist(["NAVIGATE", "OVERLAY", "CHANGE_TO"]),
+      transition,
+      resetScrollPosition: v.optional(v.boolean(), true),
+      resetVideoPosition: v.optional(v.boolean(), false)
+    }),
+    v.strictObject({
+      type: v.literal("SET_VARIABLE"),
+      variableId: realId,
+      variableValue: prototypeValueSchema
+    }),
+    v.strictObject({
+      type: v.literal("SET_VARIABLE_MODE"),
+      variableCollectionId: realId,
+      variableModeId: realId
+    })
+  ];
+  if (!depth) return v.union(leaves);
+  return v.union([
+    ...leaves,
+    v.strictObject({
+      type: v.literal("CONDITIONAL"),
+      conditionalBlocks: v.pipe(
+        v.array(
+          v.strictObject({
+            condition: v.optional(prototypeValueSchema),
+            actions: v.pipe(
+              v.array(actionSchema(depth - 1)),
+              v.minLength(1),
+              v.maxLength(16)
+            )
+          })
+        ),
+        v.minLength(1),
+        v.maxLength(8),
+        v.check(
+          (blocks) => blocks.every(
+            (block, i) => block.condition !== void 0 || i === blocks.length - 1
+          ),
+          "Else must be last"
+        )
+      )
+    })
+  ]);
+}
+var prototypeActionSchema = actionSchema(3);
+function actionCount(actions) {
+  return actions.reduce(
+    (count, action) => count + 1 + (action.type === "CONDITIONAL" ? action.conditionalBlocks.reduce(
+      (n, b) => n + actionCount(b.actions),
+      0
+    ) : 0),
+    0
+  );
+}
+var reactionSchema = v.pipe(
+  v.strictObject({
+    trigger: triggerSchema,
+    actions: v.pipe(
+      v.array(prototypeActionSchema),
+      v.minLength(1),
+      v.maxLength(16)
+    )
+  }),
+  v.check(
+    (reaction) => actionCount(reaction.actions) <= 64,
+    "At most 64 actions per reaction"
+  )
+);
+var PROTOTYPE_FEATURES = [
+  "advanced_triggers",
+  "smart_animate",
+  "change_to",
+  "multiple_actions",
+  "variable_actions",
+  "expressions",
+  "conditionals"
+];
 var prototypeOperations = [
   v.strictObject({
     type: v.literal("upsert_reaction"),
@@ -118,32 +299,62 @@ var prototypePlaybackSchema = v.strictObject({
 var PROTOTYPE_OPERATIONS = prototypeOperations.map(
   (schema) => schema.entries.type.literal
 );
+function reactionFeatures(reaction) {
+  const required = /* @__PURE__ */ new Set();
+  if (reaction.trigger.type !== "ON_CLICK") required.add("advanced_triggers");
+  const values = (value) => {
+    if (value.type === "EXPRESSION") required.add("expressions");
+  };
+  const visit = (actions) => {
+    if (actions.length > 1) required.add("multiple_actions");
+    for (const action of actions) {
+      if (action.type === "NODE") {
+        if (action.navigation === "CHANGE_TO") required.add("change_to");
+        if (action.transition?.type === "SMART_ANIMATE")
+          required.add("smart_animate");
+      } else if (action.type === "SET_VARIABLE") {
+        required.add("variable_actions");
+        values(action.variableValue);
+      } else if (action.type === "SET_VARIABLE_MODE")
+        required.add("variable_actions");
+      else if (action.type === "CONDITIONAL") {
+        required.add("conditionals");
+        for (const block of action.conditionalBlocks) {
+          if (block.condition) values(block.condition);
+          visit(block.actions);
+        }
+      }
+    }
+  };
+  visit(reaction.actions);
+  return [...required];
+}
 
 // src/protocol/index.ts
-var VERSION = 2;
-var PACKAGE_VERSION = "0.2.0";
+var VERSION = 3;
+var PACKAGE_VERSION = "0.3.0";
 var PORT = 3846;
 var MAX_MESSAGE = 512 * 1024;
 var MAX_RESULT = 256 * 1024;
 var MAX_OPERATIONS = 500;
 var id2 = v2.pipe(v2.string(), v2.minLength(1), v2.maxLength(200));
-var finite3 = v2.pipe(v2.number(), v2.finite());
-var size = v2.pipe(finite3, v2.minValue(0), v2.maxValue(1e5));
+var finite2 = v2.pipe(v2.number(), v2.finite());
+var size = v2.pipe(finite2, v2.minValue(0), v2.maxValue(1e5));
 var text = v2.pipe(v2.string(), v2.maxLength(16384));
 var fontSchema = v2.strictObject({ family: id2, style: id2 });
 var color = v2.strictObject({
-  r: v2.pipe(finite3, v2.minValue(0), v2.maxValue(1)),
-  g: v2.pipe(finite3, v2.minValue(0), v2.maxValue(1)),
-  b: v2.pipe(finite3, v2.minValue(0), v2.maxValue(1))
+  r: v2.pipe(finite2, v2.minValue(0), v2.maxValue(1)),
+  g: v2.pipe(finite2, v2.minValue(0), v2.maxValue(1)),
+  b: v2.pipe(finite2, v2.minValue(0), v2.maxValue(1))
 });
 var patchSchema = v2.strictObject({
   name: v2.optional(v2.pipe(v2.string(), v2.maxLength(512))),
-  x: v2.optional(finite3),
-  y: v2.optional(finite3),
+  x: v2.optional(finite2),
+  y: v2.optional(finite2),
   width: v2.optional(size),
   height: v2.optional(size),
   visible: v2.optional(v2.boolean()),
-  opacity: v2.optional(v2.pipe(finite3, v2.minValue(0), v2.maxValue(1))),
+  opacity: v2.optional(v2.pipe(finite2, v2.minValue(0), v2.maxValue(1))),
   cornerRadius: v2.optional(size),
   clipsContent: v2.optional(v2.boolean()),
   layoutMode: v2.optional(v2.picklist(["NONE", "HORIZONTAL", "VERTICAL"])),
@@ -167,7 +378,7 @@ var patchSchema = v2.strictObject({
         v2.strictObject({
           type: v2.literal("SOLID"),
           color,
-          opacity: v2.optional(v2.pipe(finite3, v2.minValue(0), v2.maxValue(1)))
+          opacity: v2.optional(v2.pipe(finite2, v2.minValue(0), v2.maxValue(1)))
         })
       ),
       v2.maxLength(8)
@@ -391,7 +602,11 @@ var helloSchema = v2.strictObject({
     v2.array(v2.picklist(Object.keys(tools))),
     v2.maxLength(32)
   ),
-  operations: v2.pipe(v2.array(v2.string()), v2.maxLength(32))
+  operations: v2.pipe(v2.array(v2.string()), v2.maxLength(32)),
+  prototypeFeatures: v2.optional(
+    v2.pipe(v2.array(v2.picklist(PROTOTYPE_FEATURES)), v2.maxLength(16)),
+    []
+  )
 });
 function canonical(value) {
   if (value === void 0) return "null";
@@ -719,6 +934,7 @@ async function startBridge(options) {
           busy: p.busy ?? null,
           capabilities: p.capabilities,
           operations: p.operations,
+          prototypeFeatures: p.prototypeFeatures,
           accountAvailability: "unknown"
         }))
       };
@@ -729,6 +945,13 @@ async function startBridge(options) {
       (op) => !peer.operations.includes(op.type)
     ))
       throw new BridgeError("UNSUPPORTED_PEER_OPERATION");
+    if (name === "apply") {
+      for (const op of args.operations)
+        if (op.type === "upsert_reaction" && reactionFeatures(op.reaction).some(
+          (feature) => !peer.prototypeFeatures.includes(feature)
+        ))
+          throw new BridgeError("UNSUPPORTED_PEER_PROTOTYPE_FEATURE");
+    }
     if (name === "write_scope") {
       if (args.action === "release") {
         if (peer.lease?.owner !== owner)
@@ -937,7 +1160,7 @@ async function startBridge(options) {
         name: `figma_bridge_${name}`,
         description: spec.description,
         inputSchema: toJsonSchema(spec.schema, {
-          ignoreActions: ["finite"]
+          ignoreActions: ["finite", "check"]
         }),
         annotations: {
           readOnlyHint: spec.readOnly,
@@ -1057,6 +1280,7 @@ async function startBridge(options) {
                 generation: crypto.randomUUID(),
                 capabilities: [...new Set(hello.capabilities)].sort(),
                 operations: [...new Set(hello.operations)].sort(),
+                prototypeFeatures: [...new Set(hello.prototypeFeatures)].sort(),
                 token: secret(),
                 name: hello.documentName,
                 lastSeen: Date.now(),
@@ -1064,7 +1288,7 @@ async function startBridge(options) {
               };
               peers.set(peer2.id, peer2);
             }
-            if (fingerprint(peer2.capabilities) !== fingerprint([...new Set(hello.capabilities)].sort()) || fingerprint(peer2.operations) !== fingerprint([...new Set(hello.operations)].sort()))
+            if (fingerprint(peer2.capabilities) !== fingerprint([...new Set(hello.capabilities)].sort()) || fingerprint(peer2.prototypeFeatures) !== fingerprint([...new Set(hello.prototypeFeatures)].sort()) || fingerprint(peer2.operations) !== fingerprint([...new Set(hello.operations)].sort()))
               throw new BridgeError("CAPABILITIES_CHANGED_REPAIR");
             if (peer2.socket) throw new BridgeError("ALREADY_CONNECTED");
             peer2.socket = ws;

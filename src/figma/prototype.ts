@@ -14,6 +14,12 @@ import {
   reactionSchema,
   type PrototypeOperation,
 } from "../protocol/prototype";
+import {
+  checkActions,
+  checkVariant,
+  PrototypeDependencies,
+  flattenActions,
+} from "./prototype-actions";
 
 export function prototypeState(node: BaseNode): Record<string, unknown> {
   const state: Record<string, unknown> = {};
@@ -86,14 +92,24 @@ export async function checkPrototypeOperation(
     if (op.index !== undefined && op.index >= node.reactions.length)
       throw new BridgeError("REACTION_INDEX_NOT_FOUND");
     if (op.type === "upsert_reaction") {
-      for (const action of op.reaction.actions)
-        if (action.type === "NODE") {
-          const destination = await find(api, action.destinationId);
-          if (pageOf(destination)?.id !== pageOf(node)?.id)
-            throw new BridgeError("PROTOTYPE_CROSS_PAGE");
-          if (!screen(destination))
-            throw new BridgeError("PROTOTYPE_DESTINATION_NOT_SCREEN");
+      const deps = new PrototypeDependencies(api);
+      await checkActions(
+        api,
+        node,
+        op.reaction.actions,
+        deps,
+        async (source, destination, navigation) => {
+          if (navigation === "CHANGE_TO") {
+            await checkVariant(api, source, destination);
+          } else {
+            if (pageOf(destination)?.id !== pageOf(source)?.id)
+              throw new BridgeError("PROTOTYPE_CROSS_PAGE");
+            if (!screen(destination))
+              throw new BridgeError("PROTOTYPE_DESTINATION_NOT_SCREEN");
+          }
         }
+      );
+      deps.verify();
     }
   } else if (
     op.type === "upsert_flow_start" ||
@@ -122,8 +138,14 @@ export async function writePrototypeOperation(
     const target = node as SceneNode & ReactionMixin;
     const next = JSON.parse(JSON.stringify(target.reactions)) as Reaction[];
     if (op.type === "remove_reaction") next.splice(op.index, 1);
-    else if (op.index === undefined) next.push(op.reaction as Reaction);
-    else next[op.index] = op.reaction as Reaction;
+    else {
+      const reaction = JSON.parse(JSON.stringify(op.reaction));
+      // Current native mouse enter/leave reactions omit this legacy typings field.
+      if (["MOUSE_ENTER", "MOUSE_LEAVE"].includes(reaction.trigger.type))
+        delete reaction.trigger.deprecatedVersion;
+      if (op.index === undefined) next.push(reaction as Reaction);
+      else next[op.index] = reaction as Reaction;
+    }
     await target.setReactionsAsync(next);
   } else if (
     op.type === "upsert_flow_start" ||
@@ -155,6 +177,7 @@ export async function readPrototype(
   const page = await find(api, args.pageId);
   if (page.type !== "PAGE") throw new BridgeError("PROTOTYPE_PAGE_REQUIRED");
   const pageFingerprint = snapshot(page).fingerprint;
+  const dependencies = new PrototypeDependencies(api);
   if (utf8(JSON.stringify(page.flowStartingPoints)).length > 16000)
     throw new BridgeError("FLOW_LIST_TOO_LARGE");
   const queue = [...args.nodeIds],
@@ -162,6 +185,8 @@ export async function readPrototype(
     pending = new Set<string>(),
     edgeLimited = new Set<string>();
   const scheduled = new Set(args.nodeIds);
+  // Only validated CHANGE_TO dependencies and their descendants may leave the page.
+  const variantDependencies = new Set<string>();
   let queueTruncated = false;
   const enqueue = (ids: string[]) => {
     for (const id of ids) {
@@ -188,6 +213,10 @@ export async function readPrototype(
     sourceId: string;
     reactionIndex: number;
     actionIndex: number;
+    actionPath: string;
+    conditional: boolean;
+    trigger: unknown;
+    action: unknown;
     type: string;
     supported: boolean;
     destinationId?: string;
@@ -225,7 +254,10 @@ export async function readPrototype(
       issue("error", "MISSING_NODE", id);
       continue;
     }
-    if (pageOf(node)?.id !== page.id || node.type === "PAGE") {
+    if (
+      (pageOf(node)?.id !== page.id && !variantDependencies.has(id)) ||
+      node.type === "PAGE"
+    ) {
       issue("error", "OUTSIDE_PROTOTYPE_PAGE", id);
       continue;
     }
@@ -250,6 +282,8 @@ export async function readPrototype(
     nodes.push(entry);
     if ("children" in node) {
       if (node.children.length > 10000) throw new BridgeError("NODE_TOO_WIDE");
+      if (variantDependencies.has(id))
+        for (const child of node.children) variantDependencies.add(child.id);
       enqueue(node.children.map((child) => child.id));
     }
     if (!("reactions" in node)) continue;
@@ -258,9 +292,49 @@ export async function readPrototype(
         trigger: reaction.trigger,
         actions: actions(reaction),
       };
-      if (!v.safeParse(reactionSchema, canonical).success)
+      const parsed = v.safeParse(reactionSchema, canonical);
+      if (!parsed.success)
         issue("warning", "UNSUPPORTED_REACTION", id, reactionIndex);
-      for (const [actionIndex, action] of actions(reaction).entries()) {
+      else {
+        try {
+          await checkActions(
+            api,
+            node,
+            parsed.output.actions,
+            dependencies,
+            async (source, destination, navigation) => {
+              if (navigation === "CHANGE_TO") {
+                await checkVariant(api, source, destination);
+              } else {
+                if (pageOf(destination)?.id !== page.id)
+                  throw new BridgeError("CROSS_PAGE_DESTINATION");
+                if (!screen(destination))
+                  throw new BridgeError("DESTINATION_NOT_SCREEN");
+              }
+            }
+          );
+        } catch (error) {
+          issue(
+            "error",
+            error instanceof BridgeError
+              ? error.code
+              : "PROTOTYPE_DEPENDENCY_UNAVAILABLE",
+            id,
+            reactionIndex
+          );
+        }
+      }
+      const flattened = flattenActions(actions(reaction));
+      if (flattened.truncated) {
+        complete = false;
+        issue("warning", "ACTION_TRAVERSAL_TRUNCATED", id, reactionIndex);
+      }
+      for (const {
+        actionIndex,
+        actionPath,
+        conditional,
+        action,
+      } of flattened.entries) {
         if (edges.length >= args.maxEdges) {
           complete = false;
           pending.add(id);
@@ -271,8 +345,12 @@ export async function readPrototype(
           sourceId: id,
           reactionIndex,
           actionIndex,
+          actionPath,
+          conditional,
+          trigger: reaction.trigger,
+          action,
           type: String(action.type),
-          supported: v.safeParse(reactionSchema, canonical).success,
+          supported: parsed.success,
           ...(typeof action.destinationId === "string"
             ? { destinationId: action.destinationId }
             : {}),
@@ -298,9 +376,26 @@ export async function readPrototype(
               : null;
           if (!destination || destination.removed)
             issue("error", "MISSING_DESTINATION", id, reactionIndex);
-          else if (pageOf(destination)?.id !== page.id)
+          else if (
+            action.navigation !== "CHANGE_TO" &&
+            pageOf(destination)?.id !== page.id
+          )
             issue("error", "CROSS_PAGE_DESTINATION", id, reactionIndex);
           else {
+            if (action.navigation === "CHANGE_TO") {
+              try {
+                await checkVariant(api, node, destination);
+                variantDependencies.add(destination.id);
+              } catch {
+                issue(
+                  "error",
+                  "CHANGE_TO_REQUIRES_SIBLING_VARIANT",
+                  id,
+                  reactionIndex
+                );
+                continue;
+              }
+            }
             if (
               ["NAVIGATE", "OVERLAY"].includes(action.navigation) &&
               !screen(destination)
@@ -350,6 +445,12 @@ export async function readPrototype(
     )
       issue("error", "INVALID_FLOW_START", flow.nodeId);
   }
+  try {
+    dependencies.verify();
+  } catch {
+    complete = false;
+    issue("warning", "PROTOTYPE_RESOURCE_CHANGED", page.id);
+  }
   // Check after every awaited node/flow lookup; no atomic snapshot is implied.
   if (snapshot(page).fingerprint !== pageFingerprint) {
     complete = false;
@@ -387,33 +488,54 @@ export async function readPrototype(
       issue("warning", "SCENARIO_COVERAGE_INCOMPLETE", scenario.startNodeId);
     } else {
       scenarioStatus = "satisfied";
-      const reachable = new Set([scenario.startNodeId]);
+      // Over-approximate every branch and variant state. An absent path is
+      // definite; a present state-dependent path still requires playback.
       const adjacency = new Map<string, Set<string>>();
-      for (const edge of edges) {
-        const source = nodes.find((n) => n.id === edge.sourceId)?.screenId;
-        if (!source || !edge.supported || !edge.destinationId) continue;
-        const destinations = adjacency.get(source) ?? new Set<string>();
-        destinations.add(edge.destinationId);
-        adjacency.set(source, destinations);
+      const localAdjacency = new Map<string, Set<string>>();
+      const link = (
+        map: Map<string, Set<string>>,
+        source: string,
+        target: string
+      ) => {
+        const targets = map.get(source) ?? new Set<string>();
+        targets.add(target);
+        map.set(source, targets);
+      };
+      for (const node of nodes) {
+        if (!node.parentId) continue;
+        link(adjacency, node.parentId, node.id);
+        link(localAdjacency, node.parentId, node.id);
       }
-      const todo = [scenario.startNodeId];
-      while (todo.length)
-        for (const target of adjacency.get(todo.shift()!) ?? []) {
-          if (!reachable.has(target)) {
-            reachable.add(target);
-            todo.push(target);
+      for (const edge of edges) {
+        if (!edge.supported || !edge.destinationId) continue;
+        link(adjacency, edge.sourceId, edge.destinationId);
+        if (edge.navigation === "CHANGE_TO")
+          link(localAdjacency, edge.sourceId, edge.destinationId);
+      }
+      const visit = (start: string, graph: Map<string, Set<string>>) => {
+        const reached = new Set([start]);
+        const todo = [start];
+        while (todo.length)
+          for (const target of graph.get(todo.shift()!) ?? []) {
+            if (!reached.has(target)) {
+              reached.add(target);
+              todo.push(target);
+            }
           }
-        }
+        return reached;
+      };
+      const reachable = visit(scenario.startNodeId, adjacency);
+      const scenarioStates = new Set(reachable);
       for (const id of scenario.expectedScreenIds)
         if (!reachable.has(id)) {
           issue("warning", "UNREACHABLE_SCREEN", id);
           scenarioStatus = "warnings";
         }
       for (const id of scenario.requireExitNodeIds) {
+        const localStates = visit(id, localAdjacency);
+        for (const state of localStates) scenarioStates.add(state);
         const exits = edges.filter(
-          (e) =>
-            e.supported &&
-            nodes.find((n) => n.id === e.sourceId)?.screenId === id
+          (e) => e.supported && localStates.has(e.sourceId)
         );
         // Opening an overlay does not leave the underlying screen.
         if (
@@ -434,6 +556,21 @@ export async function readPrototype(
           scenarioStatus = "warnings";
         }
       }
+      if (
+        edges.some(
+          (edge) =>
+            scenarioStates.has(edge.sourceId) &&
+            (edge.type === "CONDITIONAL" || edge.navigation === "CHANGE_TO")
+        )
+      ) {
+        issue(
+          "warning",
+          "SCENARIO_REQUIRES_RUNTIME_STATE",
+          scenario.startNodeId
+        );
+        if (scenarioStatus === "satisfied")
+          scenarioStatus = "requires_playback";
+      }
     }
   }
   const result = {
@@ -441,6 +578,7 @@ export async function readPrototype(
     scenarioStatus,
     pageId: page.id,
     pageFingerprint,
+    dependencies: dependencies.snapshots(),
     flowStartingPoints: page.flowStartingPoints,
     nodes,
     edges,
@@ -494,15 +632,25 @@ export async function prototypeTool(
     targetName:
       graph.nodes.find((node) => node.id === edge.sourceId)?.name ?? null,
     expected:
-      edge.type === "BACK"
-        ? "Previous screen is visible"
-        : edge.type === "CLOSE"
-          ? "Top overlay closes"
-          : edge.navigation === "OVERLAY"
-            ? "Destination overlay is visible"
-            : edge.navigation === "NAVIGATE"
-              ? "Destination screen is visible"
-              : "Unsupported action: inspect manually",
+      edge.type === "CONDITIONAL_BRANCH"
+        ? "Exercise this branch with documented variable inputs; observe its effects or no-op"
+        : edge.type === "CONDITIONAL"
+          ? "Evaluate conditional using documented starting variable values"
+          : edge.type === "SET_VARIABLE"
+            ? "Observe the assigned runtime variable through a bound layer or subsequent branch"
+            : edge.type === "SET_VARIABLE_MODE"
+              ? "Observe the selected variable mode in bound layers"
+              : edge.navigation === "CHANGE_TO"
+                ? "The target component variant is visible"
+                : edge.type === "BACK"
+                  ? "Previous screen is visible"
+                  : edge.type === "CLOSE"
+                    ? "Top overlay closes"
+                    : edge.navigation === "OVERLAY"
+                      ? "Destination overlay is visible"
+                      : edge.navigation === "NAVIGATE"
+                        ? "Destination screen is visible"
+                        : "Unsupported action: inspect manually",
     status: "not_run",
   }));
   const steps: typeof candidates = [];

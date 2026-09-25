@@ -24,6 +24,7 @@ export declare function readPrototype(api: PluginAPI, input: Record<string, unkn
     scenarioStatus: "inconclusive" | "not_requested" | "requires_playback" | "satisfied" | "warnings";
     pageId: string;
     pageFingerprint: string;
+    dependencies: Record<string, unknown>[];
     flowStartingPoints: readonly {
         nodeId: string;
         name: string;
@@ -41,6 +42,10 @@ export declare function readPrototype(api: PluginAPI, input: Record<string, unkn
         sourceId: string;
         reactionIndex: number;
         actionIndex: number;
+        actionPath: string;
+        conditional: boolean;
+        trigger: unknown;
+        action: unknown;
         type: string;
         supported: boolean;
         destinationId?: string;
@@ -61,6 +66,7 @@ export declare function prototypeTool(api: PluginAPI, method: string, input: Rec
     scenarioStatus: "inconclusive" | "not_requested" | "requires_playback" | "satisfied" | "warnings";
     pageId: string;
     pageFingerprint: string;
+    dependencies: Record<string, unknown>[];
     flowStartingPoints: readonly {
         nodeId: string;
         name: string;
@@ -78,6 +84,10 @@ export declare function prototypeTool(api: PluginAPI, method: string, input: Rec
         sourceId: string;
         reactionIndex: number;
         actionIndex: number;
+        actionPath: string;
+        conditional: boolean;
+        trigger: unknown;
+        action: unknown;
         type: string;
         supported: boolean;
         destinationId?: string;
@@ -99,6 +109,7 @@ export declare function prototypeTool(api: PluginAPI, method: string, input: Rec
     scenarioStatus: "inconclusive" | "not_requested" | "requires_playback" | "satisfied" | "warnings";
     pageId: string;
     pageFingerprint: string;
+    dependencies: Record<string, unknown>[];
     flowStartingPoints: readonly {
         nodeId: string;
         name: string;
@@ -116,6 +127,10 @@ export declare function prototypeTool(api: PluginAPI, method: string, input: Rec
         sourceId: string;
         reactionIndex: number;
         actionIndex: number;
+        actionPath: string;
+        conditional: boolean;
+        trigger: unknown;
+        action: unknown;
         type: string;
         supported: boolean;
         destinationId?: string;
@@ -164,6 +179,10 @@ export declare function prototypeTool(api: PluginAPI, method: string, input: Rec
         sourceId: string;
         reactionIndex: number;
         actionIndex: number;
+        actionPath: string;
+        conditional: boolean;
+        trigger: unknown;
+        action: unknown;
         type: string;
         supported: boolean;
         destinationId?: string;

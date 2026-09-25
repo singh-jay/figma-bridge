@@ -1,6 +1,6 @@
 import * as v from "valibot";
-export declare const VERSION = 2;
-export declare const PACKAGE_VERSION = "0.2.0";
+export declare const VERSION = 3;
+export declare const PACKAGE_VERSION = "0.3.0";
 export declare const PORT = 3846;
 export declare const MAX_MESSAGE: number;
 export declare const MAX_RESULT: number;
@@ -51,46 +51,45 @@ export declare const patchSchema: v.StrictObjectSchema<{
 }, undefined>;
 export declare const operationSchema: v.VariantSchema<"type", [v.StrictObjectSchema<{
     readonly index: v.OptionalSchema<v.SchemaWithPipe<readonly [v.NumberSchema<undefined>, v.IntegerAction<number, undefined>, v.MinValueAction<number, 0, undefined>, v.MaxValueAction<number, 999, undefined>]>, undefined>;
-    readonly reaction: v.StrictObjectSchema<{
-        readonly trigger: v.StrictObjectSchema<{
-            readonly type: v.LiteralSchema<"ON_CLICK", undefined>;
-        }, undefined>;
-        readonly actions: v.SchemaWithPipe<readonly [v.ArraySchema<v.VariantSchema<"type", [v.StrictObjectSchema<{
-            readonly type: v.LiteralSchema<"BACK", undefined>;
+    readonly reaction: v.SchemaWithPipe<readonly [v.StrictObjectSchema<{
+        readonly trigger: v.VariantSchema<"type", [v.StrictObjectSchema<{
+            readonly type: v.PicklistSchema<["ON_CLICK", "ON_HOVER", "ON_PRESS", "ON_DRAG"], undefined>;
         }, undefined>, v.StrictObjectSchema<{
-            readonly type: v.LiteralSchema<"CLOSE", undefined>;
+            readonly type: v.LiteralSchema<"AFTER_TIMEOUT", undefined>;
+            readonly timeout: v.SchemaWithPipe<readonly [v.NumberSchema<undefined>, v.MinValueAction<number, 0, undefined>, v.MaxValueAction<number, 60, undefined>, v.DescriptionAction<number, "Seconds in the native Plugin API; 1.5 is 1500ms in the Figma editor">]>;
         }, undefined>, v.StrictObjectSchema<{
-            readonly type: v.LiteralSchema<"NODE", undefined>;
-            readonly destinationId: v.SchemaWithPipe<readonly [v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>, v.RegexAction<string, "Use confirmed node IDs">]>;
-            readonly navigation: v.PicklistSchema<["NAVIGATE", "OVERLAY"], undefined>;
-            readonly transition: v.NullableSchema<v.StrictObjectSchema<{
-                readonly type: v.LiteralSchema<"DISSOLVE", undefined>;
-                readonly duration: v.SchemaWithPipe<readonly [v.NumberSchema<undefined>, v.FiniteAction<number, undefined>, v.MinValueAction<number, 0, undefined>, v.MaxValueAction<number, 10, undefined>]>;
-                readonly easing: v.StrictObjectSchema<{
-                    readonly type: v.PicklistSchema<["LINEAR", "EASE_IN", "EASE_OUT", "EASE_IN_AND_OUT"], undefined>;
-                }, undefined>;
-            }, undefined>, undefined>;
-            readonly resetScrollPosition: v.OptionalSchema<v.BooleanSchema<undefined>, true>;
-            readonly resetVideoPosition: v.OptionalSchema<v.BooleanSchema<undefined>, false>;
-        }, undefined>], undefined>, undefined>, v.LengthAction<({
-            type: "BACK";
+            readonly type: v.PicklistSchema<["MOUSE_UP", "MOUSE_DOWN"], undefined>;
+            readonly delay: v.SchemaWithPipe<readonly [v.NumberSchema<undefined>, v.MinValueAction<number, 0, undefined>, v.MaxValueAction<number, 60, undefined>, v.DescriptionAction<number, "Seconds in the native Plugin API; 1.5 is 1500ms in the Figma editor">]>;
+        }, undefined>, v.StrictObjectSchema<{
+            readonly type: v.PicklistSchema<["MOUSE_ENTER", "MOUSE_LEAVE"], undefined>;
+            readonly delay: v.SchemaWithPipe<readonly [v.NumberSchema<undefined>, v.MinValueAction<number, 0, undefined>, v.MaxValueAction<number, 60, undefined>, v.DescriptionAction<number, "Seconds in the native Plugin API; 1.5 is 1500ms in the Figma editor">]>;
+            readonly deprecatedVersion: v.OptionalSchema<v.LiteralSchema<false, undefined>, false>;
+        }, undefined>, v.StrictObjectSchema<{
+            readonly type: v.LiteralSchema<"ON_KEY_DOWN", undefined>;
+            readonly device: v.LiteralSchema<"KEYBOARD", undefined>;
+            readonly keyCodes: v.SchemaWithPipe<readonly [v.ArraySchema<v.SchemaWithPipe<readonly [v.NumberSchema<undefined>, v.IntegerAction<number, undefined>, v.MinValueAction<number, 0, undefined>, v.MaxValueAction<number, 255, undefined>]>, undefined>, v.MinLengthAction<number[], 1, undefined>, v.MaxLengthAction<number[], 4, undefined>, v.CheckAction<number[], "Duplicate keys">]>;
+        }, undefined>], undefined>;
+        readonly actions: v.SchemaWithPipe<readonly [v.ArraySchema<v.GenericSchema<import("./prototype").PrototypeAction>, undefined>, v.MinLengthAction<import("./prototype").PrototypeAction[], 1, undefined>, v.MaxLengthAction<import("./prototype").PrototypeAction[], 16, undefined>]>;
+    }, undefined>, v.CheckAction<{
+        trigger: {
+            type: "ON_CLICK" | "ON_HOVER" | "ON_PRESS" | "ON_DRAG";
         } | {
-            type: "CLOSE";
+            type: "AFTER_TIMEOUT";
+            timeout: number;
         } | {
-            type: "NODE";
-            destinationId: string;
-            navigation: "NAVIGATE" | "OVERLAY";
-            transition: {
-                type: "DISSOLVE";
-                duration: number;
-                easing: {
-                    type: "LINEAR" | "EASE_IN" | "EASE_OUT" | "EASE_IN_AND_OUT";
-                };
-            } | null;
-            resetScrollPosition: boolean;
-            resetVideoPosition: boolean;
-        })[], 1, undefined>]>;
-    }, undefined>;
+            type: "MOUSE_UP" | "MOUSE_DOWN";
+            delay: number;
+        } | {
+            type: "MOUSE_ENTER" | "MOUSE_LEAVE";
+            delay: number;
+            deprecatedVersion: false;
+        } | {
+            type: "ON_KEY_DOWN";
+            device: "KEYBOARD";
+            keyCodes: number[];
+        };
+        actions: import("./prototype").PrototypeAction[];
+    }, "At most 64 actions per reaction">]>;
     readonly nodeId: v.SchemaWithPipe<readonly [v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>, v.RegexAction<string, "Use confirmed node IDs">]>;
     readonly expectedFingerprint: v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>;
     readonly type: v.LiteralSchema<"upsert_reaction", undefined>;
@@ -377,46 +376,45 @@ export declare const tools: {
             readonly dryRun: v.OptionalSchema<v.BooleanSchema<undefined>, false>;
             readonly operations: v.SchemaWithPipe<readonly [v.ArraySchema<v.VariantSchema<"type", [v.StrictObjectSchema<{
                 readonly index: v.OptionalSchema<v.SchemaWithPipe<readonly [v.NumberSchema<undefined>, v.IntegerAction<number, undefined>, v.MinValueAction<number, 0, undefined>, v.MaxValueAction<number, 999, undefined>]>, undefined>;
-                readonly reaction: v.StrictObjectSchema<{
-                    readonly trigger: v.StrictObjectSchema<{
-                        readonly type: v.LiteralSchema<"ON_CLICK", undefined>;
-                    }, undefined>;
-                    readonly actions: v.SchemaWithPipe<readonly [v.ArraySchema<v.VariantSchema<"type", [v.StrictObjectSchema<{
-                        readonly type: v.LiteralSchema<"BACK", undefined>;
+                readonly reaction: v.SchemaWithPipe<readonly [v.StrictObjectSchema<{
+                    readonly trigger: v.VariantSchema<"type", [v.StrictObjectSchema<{
+                        readonly type: v.PicklistSchema<["ON_CLICK", "ON_HOVER", "ON_PRESS", "ON_DRAG"], undefined>;
                     }, undefined>, v.StrictObjectSchema<{
-                        readonly type: v.LiteralSchema<"CLOSE", undefined>;
+                        readonly type: v.LiteralSchema<"AFTER_TIMEOUT", undefined>;
+                        readonly timeout: v.SchemaWithPipe<readonly [v.NumberSchema<undefined>, v.MinValueAction<number, 0, undefined>, v.MaxValueAction<number, 60, undefined>, v.DescriptionAction<number, "Seconds in the native Plugin API; 1.5 is 1500ms in the Figma editor">]>;
                     }, undefined>, v.StrictObjectSchema<{
-                        readonly type: v.LiteralSchema<"NODE", undefined>;
-                        readonly destinationId: v.SchemaWithPipe<readonly [v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>, v.RegexAction<string, "Use confirmed node IDs">]>;
-                        readonly navigation: v.PicklistSchema<["NAVIGATE", "OVERLAY"], undefined>;
-                        readonly transition: v.NullableSchema<v.StrictObjectSchema<{
-                            readonly type: v.LiteralSchema<"DISSOLVE", undefined>;
-                            readonly duration: v.SchemaWithPipe<readonly [v.NumberSchema<undefined>, v.FiniteAction<number, undefined>, v.MinValueAction<number, 0, undefined>, v.MaxValueAction<number, 10, undefined>]>;
-                            readonly easing: v.StrictObjectSchema<{
-                                readonly type: v.PicklistSchema<["LINEAR", "EASE_IN", "EASE_OUT", "EASE_IN_AND_OUT"], undefined>;
-                            }, undefined>;
-                        }, undefined>, undefined>;
-                        readonly resetScrollPosition: v.OptionalSchema<v.BooleanSchema<undefined>, true>;
-                        readonly resetVideoPosition: v.OptionalSchema<v.BooleanSchema<undefined>, false>;
-                    }, undefined>], undefined>, undefined>, v.LengthAction<({
-                        type: "BACK";
+                        readonly type: v.PicklistSchema<["MOUSE_UP", "MOUSE_DOWN"], undefined>;
+                        readonly delay: v.SchemaWithPipe<readonly [v.NumberSchema<undefined>, v.MinValueAction<number, 0, undefined>, v.MaxValueAction<number, 60, undefined>, v.DescriptionAction<number, "Seconds in the native Plugin API; 1.5 is 1500ms in the Figma editor">]>;
+                    }, undefined>, v.StrictObjectSchema<{
+                        readonly type: v.PicklistSchema<["MOUSE_ENTER", "MOUSE_LEAVE"], undefined>;
+                        readonly delay: v.SchemaWithPipe<readonly [v.NumberSchema<undefined>, v.MinValueAction<number, 0, undefined>, v.MaxValueAction<number, 60, undefined>, v.DescriptionAction<number, "Seconds in the native Plugin API; 1.5 is 1500ms in the Figma editor">]>;
+                        readonly deprecatedVersion: v.OptionalSchema<v.LiteralSchema<false, undefined>, false>;
+                    }, undefined>, v.StrictObjectSchema<{
+                        readonly type: v.LiteralSchema<"ON_KEY_DOWN", undefined>;
+                        readonly device: v.LiteralSchema<"KEYBOARD", undefined>;
+                        readonly keyCodes: v.SchemaWithPipe<readonly [v.ArraySchema<v.SchemaWithPipe<readonly [v.NumberSchema<undefined>, v.IntegerAction<number, undefined>, v.MinValueAction<number, 0, undefined>, v.MaxValueAction<number, 255, undefined>]>, undefined>, v.MinLengthAction<number[], 1, undefined>, v.MaxLengthAction<number[], 4, undefined>, v.CheckAction<number[], "Duplicate keys">]>;
+                    }, undefined>], undefined>;
+                    readonly actions: v.SchemaWithPipe<readonly [v.ArraySchema<v.GenericSchema<import("./prototype").PrototypeAction>, undefined>, v.MinLengthAction<import("./prototype").PrototypeAction[], 1, undefined>, v.MaxLengthAction<import("./prototype").PrototypeAction[], 16, undefined>]>;
+                }, undefined>, v.CheckAction<{
+                    trigger: {
+                        type: "ON_CLICK" | "ON_HOVER" | "ON_PRESS" | "ON_DRAG";
                     } | {
-                        type: "CLOSE";
+                        type: "AFTER_TIMEOUT";
+                        timeout: number;
                     } | {
-                        type: "NODE";
-                        destinationId: string;
-                        navigation: "NAVIGATE" | "OVERLAY";
-                        transition: {
-                            type: "DISSOLVE";
-                            duration: number;
-                            easing: {
-                                type: "LINEAR" | "EASE_IN" | "EASE_OUT" | "EASE_IN_AND_OUT";
-                            };
-                        } | null;
-                        resetScrollPosition: boolean;
-                        resetVideoPosition: boolean;
-                    })[], 1, undefined>]>;
-                }, undefined>;
+                        type: "MOUSE_UP" | "MOUSE_DOWN";
+                        delay: number;
+                    } | {
+                        type: "MOUSE_ENTER" | "MOUSE_LEAVE";
+                        delay: number;
+                        deprecatedVersion: false;
+                    } | {
+                        type: "ON_KEY_DOWN";
+                        device: "KEYBOARD";
+                        keyCodes: number[];
+                    };
+                    actions: import("./prototype").PrototypeAction[];
+                }, "At most 64 actions per reaction">]>;
                 readonly nodeId: v.SchemaWithPipe<readonly [v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>, v.RegexAction<string, "Use confirmed node IDs">]>;
                 readonly expectedFingerprint: v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>;
                 readonly type: v.LiteralSchema<"upsert_reaction", undefined>;
@@ -568,26 +566,23 @@ export declare const tools: {
                 index?: number | undefined;
                 reaction: {
                     trigger: {
-                        type: "ON_CLICK";
+                        type: "ON_CLICK" | "ON_HOVER" | "ON_PRESS" | "ON_DRAG";
+                    } | {
+                        type: "AFTER_TIMEOUT";
+                        timeout: number;
+                    } | {
+                        type: "MOUSE_UP" | "MOUSE_DOWN";
+                        delay: number;
+                    } | {
+                        type: "MOUSE_ENTER" | "MOUSE_LEAVE";
+                        delay: number;
+                        deprecatedVersion: false;
+                    } | {
+                        type: "ON_KEY_DOWN";
+                        device: "KEYBOARD";
+                        keyCodes: number[];
                     };
-                    actions: ({
-                        type: "BACK";
-                    } | {
-                        type: "CLOSE";
-                    } | {
-                        type: "NODE";
-                        destinationId: string;
-                        navigation: "NAVIGATE" | "OVERLAY";
-                        transition: {
-                            type: "DISSOLVE";
-                            duration: number;
-                            easing: {
-                                type: "LINEAR" | "EASE_IN" | "EASE_OUT" | "EASE_IN_AND_OUT";
-                            };
-                        } | null;
-                        resetScrollPosition: boolean;
-                        resetVideoPosition: boolean;
-                    })[];
+                    actions: import("./prototype").PrototypeAction[];
                 };
                 nodeId: string;
                 expectedFingerprint: string;
@@ -726,26 +721,23 @@ export declare const tools: {
                 index?: number | undefined;
                 reaction: {
                     trigger: {
-                        type: "ON_CLICK";
+                        type: "ON_CLICK" | "ON_HOVER" | "ON_PRESS" | "ON_DRAG";
+                    } | {
+                        type: "AFTER_TIMEOUT";
+                        timeout: number;
+                    } | {
+                        type: "MOUSE_UP" | "MOUSE_DOWN";
+                        delay: number;
+                    } | {
+                        type: "MOUSE_ENTER" | "MOUSE_LEAVE";
+                        delay: number;
+                        deprecatedVersion: false;
+                    } | {
+                        type: "ON_KEY_DOWN";
+                        device: "KEYBOARD";
+                        keyCodes: number[];
                     };
-                    actions: ({
-                        type: "BACK";
-                    } | {
-                        type: "CLOSE";
-                    } | {
-                        type: "NODE";
-                        destinationId: string;
-                        navigation: "NAVIGATE" | "OVERLAY";
-                        transition: {
-                            type: "DISSOLVE";
-                            duration: number;
-                            easing: {
-                                type: "LINEAR" | "EASE_IN" | "EASE_OUT" | "EASE_IN_AND_OUT";
-                            };
-                        } | null;
-                        resetScrollPosition: boolean;
-                        resetVideoPosition: boolean;
-                    })[];
+                    actions: import("./prototype").PrototypeAction[];
                 };
                 nodeId: string;
                 expectedFingerprint: string;
@@ -904,7 +896,7 @@ export declare const tools: {
 export type ToolName = keyof typeof tools;
 export declare const commandSchema: v.StrictObjectSchema<{
     readonly type: v.LiteralSchema<"command", undefined>;
-    readonly version: v.LiteralSchema<2, undefined>;
+    readonly version: v.LiteralSchema<3, undefined>;
     readonly requestId: v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>;
     readonly method: v.PicklistSchema<["read_prototype", "validate_prototype", "prepare_prototype_playback", "selection", "read_nodes", "scope", "apply", "operation_status", "read_resources", "export_begin", "export_chunk", "export_release", "cancel_operation", "read_text"], undefined>;
     readonly params: v.RecordSchema<v.StringSchema<undefined>, v.UnknownSchema, undefined>;
@@ -912,7 +904,7 @@ export declare const commandSchema: v.StrictObjectSchema<{
 export type Command = v.InferOutput<typeof commandSchema>;
 export declare const replySchema: v.StrictObjectSchema<{
     readonly type: v.LiteralSchema<"result", undefined>;
-    readonly version: v.LiteralSchema<2, undefined>;
+    readonly version: v.LiteralSchema<3, undefined>;
     readonly requestId: v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>;
     readonly ok: v.BooleanSchema<undefined>;
     readonly result: v.OptionalSchema<v.UnknownSchema, undefined>;
@@ -920,12 +912,13 @@ export declare const replySchema: v.StrictObjectSchema<{
 }, undefined>;
 export declare const helloSchema: v.StrictObjectSchema<{
     readonly type: v.LiteralSchema<"hello", undefined>;
-    readonly version: v.LiteralSchema<2, undefined>;
+    readonly version: v.LiteralSchema<3, undefined>;
     readonly token: v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.LengthAction<string, 64, undefined>]>;
     readonly nonce: v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>;
     readonly documentName: v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MaxLengthAction<string, 512, undefined>]>;
     readonly capabilities: v.SchemaWithPipe<readonly [v.ArraySchema<v.PicklistSchema<["read_prototype" | "validate_prototype" | "prepare_prototype_playback" | "selection" | "read_nodes" | "apply" | "operation_status" | "read_resources" | "cancel_operation" | "read_text" | "sessions" | "export" | "design_context" | "write_scope", ...("read_prototype" | "validate_prototype" | "prepare_prototype_playback" | "selection" | "read_nodes" | "apply" | "operation_status" | "read_resources" | "cancel_operation" | "read_text" | "sessions" | "export" | "design_context" | "write_scope")[]], undefined>, undefined>, v.MaxLengthAction<("read_prototype" | "validate_prototype" | "prepare_prototype_playback" | "selection" | "read_nodes" | "apply" | "operation_status" | "read_resources" | "cancel_operation" | "read_text" | "sessions" | "export" | "design_context" | "write_scope")[], 32, undefined>]>;
     readonly operations: v.SchemaWithPipe<readonly [v.ArraySchema<v.StringSchema<undefined>, undefined>, v.MaxLengthAction<string[], 32, undefined>]>;
+    readonly prototypeFeatures: v.OptionalSchema<v.SchemaWithPipe<readonly [v.ArraySchema<v.PicklistSchema<readonly ["advanced_triggers", "smart_animate", "change_to", "multiple_actions", "variable_actions", "expressions", "conditionals"], undefined>, undefined>, v.MaxLengthAction<("advanced_triggers" | "smart_animate" | "change_to" | "multiple_actions" | "variable_actions" | "expressions" | "conditionals")[], 16, undefined>]>, readonly []>;
 }, undefined>;
 export declare function canonical(value: unknown): string;
 export declare function utf8(value: string): Uint8Array;

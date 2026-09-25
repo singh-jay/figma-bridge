@@ -217,7 +217,7 @@ Reads indicate truncation and continuation IDs. Writes allow at most 50 operatio
 
 ## Prototype authoring and playback
 
-Version 0.2 adds click/tap interactions with one action: navigate, open overlay, back or close overlay. Navigation supports instant (`transition: null`) and dissolve transitions. The bridge can add/remove named flow starts and set `overflowDirection` to `NONE`, `HORIZONTAL`, `VERTICAL` or `BOTH`. It preserves other reactions and flow starts when changing an explicitly targeted entry.
+Version 0.3 supports click, hover, press, drag, keyboard and delayed triggers; ordered actions; navigate, overlays, back/close and existing sibling-variant transitions; instant, dissolve and Smart Animate motion; existing local variable assignments, mode changes, typed expressions and bounded conditionals. The bridge can add/remove named flow starts and set `overflowDirection` to `NONE`, `HORIZONTAL`, `VERTICAL` or `BOTH`. It preserves other reactions and flow starts when changing an explicitly targeted entry.
 
 ```text
 $figma-bridge Wire the selected screens into a prototype: Continue goes
@@ -235,11 +235,31 @@ Follow this project’s framework, components and styling conventions.
 
 The agent uses the bridge to author and inspect the prototype, then its existing browser or desktop controller to operate Figma’s presentation UI. No second browser runtime is installed. Without that controller or an authenticated Figma player, authoring still works; playback must be reported as blocked or unverified. `prepare_prototype_playback` always returns `playbackStatus: "not_run"`; a valid graph is not a passed interaction test.
 
-Use explicit `sessionId`, `pageId`, starting node IDs and bounded traversal. Tools report incomplete or unsupported paths. Check the selected session’s advertised operations before writing; account availability remains unknown until an operation succeeds in the actual account. The [skill’s prototype reference](skills/figma-bridge/references/prototypes.md) includes the operation shapes, recovery rules and evidence format.
+Free-account desktop QA has verified click-to-variant, hover with return, press with release, mouse-down persistence and mouse-up activation. Mouse-enter/leave authoring and readback pass, but their player acceptance remains inconclusive in the tested desktop session. See [verification details](docs/advanced-prototype-verification.md).
+
+Use explicit `sessionId`, `pageId`, starting node IDs and bounded traversal. Tools report incomplete or unsupported paths. Check the selected session’s advertised operations before writing; account availability remains unknown; a successful write does not prove playback entitlement. Check the peer’s `prototypeFeatures` as well as its operations. The [skill’s prototype reference](skills/figma-bridge/references/prototypes.md) includes the operation shapes, recovery rules and evidence format.
 
 Create screens first, then use their confirmed IDs to wire reactions. **Configure flow starts in a separate batch after reading fresh page state:** Figma can automatically create a flow start when the first interaction is added. A mixed batch may correctly stop with a partial receipt and `STALE_FINGERPRINT`. Inspect the receipt and resume only unexecuted work with fresh fingerprints.
 
-Basic navigation, back, overlays and dissolve were accepted in a Figma Free account during desktop verification. This does not unlock every Figma feature or remove Figma plan restrictions. Variable actions, expressions, conditionals, multiple actions, Smart Animate, advanced triggers and arbitrary overlay settings are outside the current write API. Existing unsupported reactions remain readable and are preserved when other entries are edited. Scrolling configuration is supported; a screen still needs overflowing content to visibly scroll.
+Basic navigation, back, overlays and dissolve were accepted in a Figma Free account during desktop verification. This does not unlock every Figma feature or remove Figma plan restrictions. Variables, expressions and conditionals in prototypes still require an eligible paid plan. Arbitrary overlay settings, media actions, custom transition curves, library imports and new component/variable-collection authoring remain outside this API. Existing unsupported reactions remain readable and are preserved when other entries are edited. Scrolling configuration is supported; a screen still needs overflowing content to visibly scroll.
+
+### Advanced prototype examples
+
+The [advanced skill reference](skills/figma-bridge/references/advanced-prototypes.md) contains copyable trigger, variable, expression and conditional schemas. Trigger timing uses **seconds** (`timeout: 1.5` is a 1500ms native delay); motion duration also uses seconds. Variable IDs must refer to existing local resources.
+
+```text
+Use $figma-bridge to add hover and drag interactions, a K-key shortcut and
+an automatic 1.5-second delay to the selected QA flow. Use Smart Animate
+between matching layers, read every reaction back, then test the real player.
+Record missing controller capabilities and save a local evidence bundle.
+```
+
+```text
+Use $figma-bridge to wire the selected button to toggle the existing local
+boolean variable, then branch to the specified screens. Verify both true and
+false paths after restart and record each returned actionPath separately.
+Report paid-plan restrictions without claiming untested playback passed.
+```
 
 ### Scenario checks and evidence
 
@@ -253,17 +273,17 @@ npx --no-install figma-bridge prototype-report --project . --input /absolute/pat
 
 The [prototype skill reference](skills/figma-bridge/references/prototypes.md#save-a-durable-evidence-bundle) describes the input; a JSON Schema ships at `schema/prototype-report.schema.json`. The command creates a local run folder with `report.json`, copied screenshots and SHA-256 hashes under ignored `.figma-bridge/prototype-runs/`. It computes coverage and blocks unsupported claims: missing login/controller/document confirmation, disconnected plugin, changed flow/session or missing evidence cannot produce a passed report. Controller observations still require honest visual inspection; this command does not automate or authenticate the player.
 
-### Upgrade from 0.1
+### Upgrade from 0.1 or 0.2
 
-Update the package dependency to a reviewed 0.2 commit from [the repository](https://github.com/singh-jay/figma-bridge), preserving your project profile. Then:
+Update the package dependency to a reviewed 0.3 commit from [the repository](https://github.com/singh-jay/figma-bridge), preserving your project profile. Then:
 
 1. Stop the old bridge service and close its Figma plugin.
 2. Run `npx --no-install figma-bridge init --project . --force` to refresh generated assets and MCP snippets. Use the same custom `--port` and `--state-dir`, if configured.
 3. Start the new service, reopen the development plugin and generate a fresh pairing token with `figma-bridge pair`.
 4. Refresh the installed skill with `npx --no-install figma-bridge install-skill --force`, and reconnect/restart the agent’s MCP connection.
-5. Check `sessions` for protocol 2 and the connected peer’s prototype operations.
+5. Check `sessions` for protocol 3 and the connected peer’s prototype operations/features.
 
-Package 0.2 uses protocol 2 and new mutation fingerprints. Old plugins are rejected with an upgrade message; do not reuse old leases or fingerprints. Project configuration stays at version 1. If the plugin menu contains multiple entries with the same name, check their manifest paths and run the one generated by the updated package.
+Package 0.3 uses protocol 3 and includes prototype resource dependencies in flow fingerprints. Old plugins are rejected with an upgrade message; do not reuse old leases or fingerprints. Project configuration stays at version 1. If the plugin menu contains multiple entries with the same name, check their manifest paths and run the one generated by the updated package.
 
 ## Diagnostics and local state
 
