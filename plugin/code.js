@@ -1735,10 +1735,6 @@
     if (pending.size || queueTruncated) complete = false;
     if (!page.flowStartingPoints.length)
       issue("warning", "NO_FLOW_STARTS", page.id);
-    if (snapshot2(page).fingerprint !== pageFingerprint) {
-      complete = false;
-      issue("warning", "FLOW_CHANGED_DURING_READ", page.id);
-    }
     for (const node of nodes) {
       const live = await api.getNodeByIdAsync(node.id);
       if (!live || live.removed || snapshot2(live).fingerprint !== node.fingerprint) {
@@ -1750,6 +1746,10 @@
       const start = await api.getNodeByIdAsync(flow.nodeId);
       if (!start || start.removed || pageOf(start)?.id !== page.id || !screen(start))
         issue("error", "INVALID_FLOW_START", flow.nodeId);
+    }
+    if (snapshot2(page).fingerprint !== pageFingerprint) {
+      complete = false;
+      issue("warning", "FLOW_CHANGED_DURING_READ", page.id);
     }
     const scenario = args.scenario;
     let scenarioStatus = "not_requested";

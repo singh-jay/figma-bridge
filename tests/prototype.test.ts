@@ -472,3 +472,51 @@ test("playback rejects expectations validated from a different starting screen",
     )
   ).rejects.toThrow("SCENARIO_START_MISMATCH");
 });
+
+for (const method of ["validate_prototype", "prepare_prototype_playback"]) {
+  for (const phase of ["node verification", "flow-start validation"]) {
+    test(`${method} detects flow edits during final ${phase} lookups`, async () => {
+      const f = fixture();
+      f.page.flowStartingPoints = [{ nodeId: f.a.id, name: "Original flow" }];
+      const original = f.api.getNodeByIdAsync as (
+        id: string
+      ) => Promise<MockNode | null>;
+      const reads = new Map<string, number>();
+      let changed = false;
+      f.api.getNodeByIdAsync = async (id: string) => {
+        const node = await original(id);
+        const count = (reads.get(id) ?? 0) + 1;
+        reads.set(id, count);
+        const editNow =
+          phase === "node verification"
+            ? id === f.button.id && count === 2
+            : id === f.a.id && count === 3;
+        if (editNow) {
+          f.page.flowStartingPoints = [{ nodeId: f.a.id, name: "Edited flow" }];
+          changed = true;
+        }
+        return node;
+      };
+      const result = (await f.engine.dispatch(
+        method,
+        f.read({
+          scenario: { startNodeId: f.a.id },
+          ...(method === "prepare_prototype_playback"
+            ? { startNodeId: f.a.id }
+            : {}),
+        })
+      )) as any;
+      expect(changed).toBe(true);
+      expect(result.complete).toBe(false);
+      expect(result.structuralStatus).toBe("inconclusive");
+      expect(result.scenarioStatus).toBe("inconclusive");
+      expect(result.issues).toContainEqual({
+        severity: "warning",
+        code: "FLOW_CHANGED_DURING_READ",
+        nodeId: f.page.id,
+      });
+      if (method === "prepare_prototype_playback")
+        expect(result.readyForPlayback).toBe(false);
+    });
+  }
+}

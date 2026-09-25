@@ -329,11 +329,6 @@ export async function readPrototype(
   if (pending.size || queueTruncated) complete = false;
   if (!page.flowStartingPoints.length)
     issue("warning", "NO_FLOW_STARTS", page.id);
-  // Verify the read was stable across awaited lookups; no atomic snapshot is implied.
-  if (snapshot(page).fingerprint !== pageFingerprint) {
-    complete = false;
-    issue("warning", "FLOW_CHANGED_DURING_READ", page.id);
-  }
   for (const node of nodes) {
     const live = await api.getNodeByIdAsync(node.id);
     if (
@@ -354,6 +349,11 @@ export async function readPrototype(
       !screen(start)
     )
       issue("error", "INVALID_FLOW_START", flow.nodeId);
+  }
+  // Check after every awaited node/flow lookup; no atomic snapshot is implied.
+  if (snapshot(page).fingerprint !== pageFingerprint) {
+    complete = false;
+    issue("warning", "FLOW_CHANGED_DURING_READ", page.id);
   }
   // Only check caller-declared expectations against a complete supported graph.
   // BACK/CLOSE are history dependent, so they cannot prove a static exit path.
