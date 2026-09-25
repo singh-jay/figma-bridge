@@ -16,6 +16,12 @@ type Snapshot = (node: BaseNode) => {
 };
 export declare function readPrototype(api: PluginAPI, input: Record<string, unknown>, snapshot: Snapshot): Promise<{
     flowFingerprint: string;
+    scenario: {
+        startNodeId: string;
+        expectedScreenIds: string[];
+        requireExitNodeIds: string[];
+    } | null;
+    scenarioStatus: "inconclusive" | "not_requested" | "requires_playback" | "satisfied" | "warnings";
     pageId: string;
     pageFingerprint: string;
     flowStartingPoints: readonly {
@@ -27,6 +33,7 @@ export declare function readPrototype(api: PluginAPI, input: Record<string, unkn
         name: string;
         type: string;
         parentId: string | null;
+        screenId: string | null;
         fingerprint: string;
         prototype: Record<string, unknown>;
     }[];
@@ -35,6 +42,7 @@ export declare function readPrototype(api: PluginAPI, input: Record<string, unkn
         reactionIndex: number;
         actionIndex: number;
         type: string;
+        supported: boolean;
         destinationId?: string;
         navigation?: string;
     }[];
@@ -45,6 +53,12 @@ export declare function readPrototype(api: PluginAPI, input: Record<string, unkn
 }>;
 export declare function prototypeTool(api: PluginAPI, method: string, input: Record<string, unknown>, snapshot: Snapshot): Promise<{
     flowFingerprint: string;
+    scenario: {
+        startNodeId: string;
+        expectedScreenIds: string[];
+        requireExitNodeIds: string[];
+    } | null;
+    scenarioStatus: "inconclusive" | "not_requested" | "requires_playback" | "satisfied" | "warnings";
     pageId: string;
     pageFingerprint: string;
     flowStartingPoints: readonly {
@@ -56,6 +70,7 @@ export declare function prototypeTool(api: PluginAPI, method: string, input: Rec
         name: string;
         type: string;
         parentId: string | null;
+        screenId: string | null;
         fingerprint: string;
         prototype: Record<string, unknown>;
     }[];
@@ -64,6 +79,7 @@ export declare function prototypeTool(api: PluginAPI, method: string, input: Rec
         reactionIndex: number;
         actionIndex: number;
         type: string;
+        supported: boolean;
         destinationId?: string;
         navigation?: string;
     }[];
@@ -75,6 +91,12 @@ export declare function prototypeTool(api: PluginAPI, method: string, input: Rec
     structuralStatus: string;
     playbackStatus: string;
     flowFingerprint: string;
+    scenario: {
+        startNodeId: string;
+        expectedScreenIds: string[];
+        requireExitNodeIds: string[];
+    } | null;
+    scenarioStatus: "inconclusive" | "not_requested" | "requires_playback" | "satisfied" | "warnings";
     pageId: string;
     pageFingerprint: string;
     flowStartingPoints: readonly {
@@ -86,6 +108,7 @@ export declare function prototypeTool(api: PluginAPI, method: string, input: Rec
         name: string;
         type: string;
         parentId: string | null;
+        screenId: string | null;
         fingerprint: string;
         prototype: Record<string, unknown>;
     }[];
@@ -94,6 +117,7 @@ export declare function prototypeTool(api: PluginAPI, method: string, input: Rec
         reactionIndex: number;
         actionIndex: number;
         type: string;
+        supported: boolean;
         destinationId?: string;
         navigation?: string;
     }[];
@@ -112,6 +136,12 @@ export declare function prototypeTool(api: PluginAPI, method: string, input: Rec
     evidence?: undefined;
     instructions?: undefined;
 } | {
+    scenario: {
+        startNodeId: string;
+        expectedScreenIds: string[];
+        requireExitNodeIds: string[];
+    } | null;
+    scenarioStatus: "inconclusive" | "not_requested" | "requires_playback" | "satisfied" | "warnings";
     pageId: string;
     flowFingerprint: string;
     complete: boolean;
@@ -135,6 +165,7 @@ export declare function prototypeTool(api: PluginAPI, method: string, input: Rec
         reactionIndex: number;
         actionIndex: number;
         type: string;
+        supported: boolean;
         destinationId?: string;
         navigation?: string;
     }[];

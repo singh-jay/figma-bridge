@@ -62,7 +62,13 @@ var prototypeOperations = [
   })
 ];
 var prototypeOperationSchema = v.variant("type", prototypeOperations);
+var scenarioSchema = v.strictObject({
+  startNodeId: realId,
+  expectedScreenIds: v.optional(v.pipe(v.array(realId), v.maxLength(100)), []),
+  requireExitNodeIds: v.optional(v.pipe(v.array(realId), v.maxLength(100)), [])
+});
 var prototypeReadEntries = {
+  scenario: v.optional(scenarioSchema),
   sessionId: id,
   pageId: realId,
   nodeIds: v.pipe(v.array(realId), v.minLength(1), v.maxLength(24)),

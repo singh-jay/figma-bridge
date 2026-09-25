@@ -241,6 +241,18 @@ Create screens first, then use their confirmed IDs to wire reactions. **Configur
 
 Basic navigation, back, overlays and dissolve were accepted in a Figma Free account during desktop verification. This does not unlock every Figma feature or remove Figma plan restrictions. Variable actions, expressions, conditionals, multiple actions, Smart Animate, advanced triggers and arbitrary overlay settings are outside the current write API. Existing unsupported reactions remain readable and are preserved when other entries are edited. Scrolling configuration is supported; a screen still needs overflowing content to visibly scroll.
 
+### Scenario checks and evidence
+
+Prototype reads/validation accept optional `scenario: { startNodeId, expectedScreenIds, requireExitNodeIds }`. Include potentially disconnected expected screens among the seed `nodeIds`. The validator warns about unreachable screens and required exits only for complete, supported coverage. BACK/CLOSE require real history; intentional terminal screens remain valid unless explicitly required to have an exit.
+
+After testing, save controller observations and actual player screenshots with:
+
+```sh
+npx --no-install figma-bridge prototype-report --project . --input /absolute/path/run-input.json
+```
+
+The [prototype skill reference](skills/figma-bridge/references/prototypes.md#save-a-durable-evidence-bundle) describes the input; a JSON Schema ships at `schema/prototype-report.schema.json`. The command creates a local run folder with `report.json`, copied screenshots and SHA-256 hashes under ignored `.figma-bridge/prototype-runs/`. It computes coverage and blocks unsupported claims: missing login/controller/document confirmation, disconnected plugin, changed flow/session or missing evidence cannot produce a passed report. Controller observations still require honest visual inspection; this command does not automate or authenticate the player.
+
 ### Upgrade from 0.1
 
 Update the package dependency to a reviewed 0.2 commit from [the repository](https://github.com/singh-jay/figma-bridge), preserving your project profile. Then:

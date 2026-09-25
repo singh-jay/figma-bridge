@@ -144,6 +144,109 @@ try {
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9ZlKAAAAAASUVORK5CYII=",
     "base64"
   );
+  // Exercise the installed CLI and on-disk bundles, including blocked conditions.
+  assert(
+    packed.files.some((f) => f.path === "schema/prototype-report.schema.json")
+  );
+  writeFileSync(join(projectA, "evidence.png"), image);
+  const reportInput = {
+    prepared: {
+      sessionId: "s",
+      generation: "g",
+      pageId: "p",
+      startNodeId: "a",
+      flowFingerprint: "fp",
+      structuralStatus: "valid",
+      complete: true,
+      stepsComplete: true,
+      steps: [{ sourceId: "button", reactionIndex: 0, actionIndex: 0 }],
+    },
+    after: { sessionId: "s", generation: "g", flowFingerprint: "fp" },
+    environment: {
+      controllerAvailable: true,
+      authenticated: true,
+      pluginConnected: true,
+      documentIdentity: "confirmed",
+      observedStartNodeId: "a",
+      viewport: { width: 1000, height: 800 },
+    },
+    checks: [
+      {
+        id: "button/0/0",
+        action: "Click",
+        expected: "B",
+        observed: "B",
+        status: "passed",
+        observedAt: new Date().toISOString(),
+        screenshots: ["evidence.png"],
+      },
+    ],
+  };
+  const cases = [
+    ["passed", (x) => x],
+    [
+      "blocked",
+      (x) => {
+        x.environment.controllerAvailable = false;
+      },
+    ],
+    [
+      "blocked",
+      (x) => {
+        x.environment.authenticated = false;
+      },
+    ],
+    [
+      "blocked",
+      (x) => {
+        x.environment.documentIdentity = "ambiguous";
+      },
+    ],
+    [
+      "blocked",
+      (x) => {
+        x.environment.documentIdentity = "mismatch";
+      },
+    ],
+    [
+      "blocked",
+      (x) => {
+        x.environment.pluginConnected = false;
+      },
+    ],
+    [
+      "inconclusive",
+      (x) => {
+        x.after.flowFingerprint = "changed";
+      },
+    ],
+    [
+      "inconclusive",
+      (x) => {
+        x.prepared.structuralStatus = "inconclusive";
+      },
+    ],
+  ];
+  for (const [status, mutate] of cases) {
+    const input = structuredClone(reportInput);
+    mutate(input);
+    const inputPath = join(work, "report-input.json");
+    writeFileSync(inputPath, JSON.stringify(input));
+    const saved = JSON.parse(
+      execFileSync(
+        process.execPath,
+        [cli, "prototype-report", "--project", projectA, "--input", inputPath],
+        { encoding: "utf8" }
+      )
+    );
+    assert.equal(saved.status, status);
+    const report = JSON.parse(readFileSync(saved.path, "utf8"));
+    assert.equal(report.status, status);
+    assert.deepEqual(
+      readFileSync(join(saved.path, "..", report.artifacts[0].path)),
+      image
+    );
+  }
   let creates = 0;
   async function peer(file) {
     const pairing = await (
@@ -367,6 +470,7 @@ try {
           "14 stdio tools/instructions",
           "two projects/two controlled document peers",
           "peer capabilities/prototype routing",
+          "playback evidence bundles/eight outcome cases",
           "scoped leases",
           "idempotent writes",
           "receipt recovery",

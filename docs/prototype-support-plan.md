@@ -1,6 +1,6 @@
 # Prototype authoring and playback plan
 
-Status: MVP implemented and verified, 2026-09-25. The sections below retain the design rationale; see `prototype-verification.md` for delivered scope and acceptance evidence. Scenario-specific reachability/exit expectations remain agent checks, not automated validator guarantees.
+Status: MVP implemented and verified, 2026-09-25. The sections below retain the design rationale; see `prototype-verification.md` for delivered scope and acceptance evidence. Scenario-specific reachability and exit expectations are now accepted by the validator; history-dependent exits explicitly require playback. Durable evidence bundles are supported by the CLI.
 
 ## Outcome and boundaries
 

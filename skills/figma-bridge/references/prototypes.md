@@ -6,7 +6,17 @@ Select an explicit session, page and starting screen. Check `figma_bridge_sessio
 
 Read `figma_bridge_read_prototype` with `sessionId`, `pageId`, `nodeIds` and `traverseDestinations: true` when the requested scenario includes linked destinations. Defaults are 100 nodes and 200 edges; caps are 500 and 1,000. Reads preserve raw reactions, including unsupported data. Follow pending IDs with scoped reads, keeping incomplete coverage explicit; edge-budget exhaustion may require a larger bounded budget. Do not treat separate reads as one atomic snapshot.
 
-`figma_bridge_validate_prototype` returns `structuralStatus` (`valid`, `invalid`, `inconclusive`) and `playbackStatus: "not_run"`. Errors include missing/cross-page/invalid destinations. Unsupported or truncated paths prevent a conclusive result. Terminal screens and cycles can be intentional. Decide reachability and exit expectations from the requested scenario; this validator does not prove them.
+`figma_bridge_validate_prototype` returns `structuralStatus` (`valid`, `invalid`, `inconclusive`) and `playbackStatus: "not_run"`. Errors include missing/cross-page/invalid destinations. Unsupported or truncated paths prevent a conclusive result. Terminal screens and cycles can be intentional. Supply caller-defined expectations with optional `scenario`:
+
+```json
+{
+  "startNodeId": "confirmed-start",
+  "expectedScreenIds": ["screen-b", "screen-c"],
+  "requireExitNodeIds": ["screen-b"]
+}
+```
+
+Seed `nodeIds` with the start plus any expected screen that may be disconnected, and enable destination traversal. `UNREACHABLE_SCREEN` and `MISSING_EXIT_PATH` warn only about explicitly declared expectations. Missing/incomplete/unsupported coverage returns an inconclusive scenario instead of a false unreachable claim. Opening an overlay does not count as leaving its underlying screen. BACK/CLOSE require history and return `EXIT_REQUIRES_PLAYBACK_HISTORY` with `scenarioStatus: "requires_playback"`; verify those in the player. These warnings allow preparation, but the evidence report still requires every interaction check to pass. Terminal screens need not appear in `requireExitNodeIds`.
 
 ## Guarded authoring
 
@@ -71,3 +81,19 @@ Record each action, expected outcome, observation, timestamp and available scree
 Statuses are `not_run`, `passed`, `failed`, `blocked`, `inconclusive`. Each executed step should identify its source/reaction, action, expected result, observed result and status. Re-read the same scoped flow after playback; a changed fingerprint makes the earlier run inconclusive. Report structural validation, write/readback and playback separately. Missing tools/login/document identity mean blocked playback, not a pass. Unsupported paths or incomplete coverage remain explicit. A design simulation does not verify real authentication, payments or backend behavior.
 
 For code implementation, return to the project’s configured target, source components and conventions. The prototype provides behavior evidence; it does not select React or any other framework.
+
+## Save a durable evidence bundle
+
+Use `figma-bridge prototype-report --project . --input /absolute/path/run-input.json` after the controller captures the requested screenshots. This command neither captures the screen nor drives the player. Obtain screenshot files through the host controller’s supported export/capture mechanism. Never substitute design exports for player screenshots.
+
+The input schema ships as `schema/prototype-report.schema.json`. Provide:
+
+- `prepared`: the full `prepare_prototype_playback` response, including session/generation.
+- `after`: a fresh response from the same preparation arguments after playback (omit if blocked).
+- `environment`: `controllerAvailable`, `authenticated`, `pluginConnected`, `documentIdentity` (`confirmed`, `ambiguous`, `mismatch`, `unknown`), `observedStartNodeId`, and `viewport` width/height. These are observed controller facts, not values to assume.
+- `checks`: observations with `id`, `action`, `expected`, `observed`, `status`, ISO `observedAt`, and `screenshots` (local PNG/JPEG paths, relative to the project or absolute). Use `<sourceId>/<reactionIndex>/<actionIndex>` as each prepared interaction’s ID. Optional `elapsedMs` records a measured duration.
+- `requiredChecks`: optional additional IDs such as `scroll` or `restart`; include corresponding observations in `checks`.
+
+The command copies and hashes screenshots into an immutable run folder under `.figma-bridge/prototype-runs/` and returns its `report.json` path. The saved report contains relative image references, observations, coverage and reasons. Keep `.figma-bridge/` ignored. It rejects duplicate check IDs, symlinked screenshot paths and non-image inputs. Limit: 100 screenshots, 10 MiB each, 100 MiB total.
+
+It computes the outcome: missing controller/login/identity/plugin blocks a run; a changed flow or session, missing post-run read, unsupported structure, untested checks or missing screenshot evidence prevents a pass. It audits submitted evidence, not image semantics or the truth of controller observations. Inspect returned `status`; a successful command exit means the bundle was saved, not that playback passed. Preserve blocked/failed bundles as useful evidence and resolve the actual cause before retesting.

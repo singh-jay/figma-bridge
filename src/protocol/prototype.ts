@@ -58,7 +58,13 @@ export const prototypeOperations = [
 ] as const;
 export const prototypeOperationSchema = v.variant("type", prototypeOperations);
 export type PrototypeOperation = v.InferOutput<typeof prototypeOperationSchema>;
+export const scenarioSchema = v.strictObject({
+  startNodeId: realId,
+  expectedScreenIds: v.optional(v.pipe(v.array(realId), v.maxLength(100)), []),
+  requireExitNodeIds: v.optional(v.pipe(v.array(realId), v.maxLength(100)), []),
+});
 export const prototypeReadEntries = {
+  scenario: v.optional(scenarioSchema),
   sessionId: id,
   pageId: realId,
   nodeIds: v.pipe(v.array(realId), v.minLength(1), v.maxLength(24)),

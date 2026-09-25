@@ -56,6 +56,14 @@ function screen(node: BaseNode) {
     (node.parent?.type === "PAGE" || node.parent?.type === "SECTION")
   );
 }
+function containingScreen(node: BaseNode): string | null {
+  let current: BaseNode | null = node;
+  while (current && current.type !== "PAGE") {
+    if (screen(current)) return current.id;
+    current = current.parent;
+  }
+  return null;
+}
 function actions(reaction: any): any[] {
   return Array.isArray(reaction.actions)
     ? reaction.actions
@@ -172,6 +180,7 @@ export async function readPrototype(
     name: string;
     type: string;
     parentId: string | null;
+    screenId: string | null;
     fingerprint: string;
     prototype: Record<string, unknown>;
   }> = [];
@@ -180,6 +189,7 @@ export async function readPrototype(
     reactionIndex: number;
     actionIndex: number;
     type: string;
+    supported: boolean;
     destinationId?: string;
     navigation?: string;
   }> = [];
@@ -225,6 +235,7 @@ export async function readPrototype(
       name: node.name,
       type: node.type,
       parentId: node.parent?.id ?? null,
+      screenId: containingScreen(node),
       fingerprint: snapshot(node).fingerprint,
       prototype: state,
     };
@@ -261,6 +272,7 @@ export async function readPrototype(
           reactionIndex,
           actionIndex,
           type: String(action.type),
+          supported: v.safeParse(reactionSchema, canonical).success,
           ...(typeof action.destinationId === "string"
             ? { destinationId: action.destinationId }
             : {}),
@@ -343,7 +355,90 @@ export async function readPrototype(
     )
       issue("error", "INVALID_FLOW_START", flow.nodeId);
   }
+  // Only check caller-declared expectations against a complete supported graph.
+  // BACK/CLOSE are history dependent, so they cannot prove a static exit path.
+  const scenario = args.scenario;
+  let scenarioStatus:
+    | "not_requested"
+    | "requires_playback"
+    | "satisfied"
+    | "warnings"
+    | "inconclusive" = "not_requested";
+  if (scenario) {
+    const screens = new Set(
+      nodes.filter((n) => n.screenId === n.id).map((n) => n.id)
+    );
+    const requested = [
+      scenario.startNodeId,
+      ...scenario.expectedScreenIds,
+      ...scenario.requireExitNodeIds,
+    ];
+    const missing = [...new Set(requested)].filter((id) => !screens.has(id));
+    if (
+      !complete ||
+      issues.some(
+        (i) => i.severity === "error" || i.code === "UNSUPPORTED_REACTION"
+      ) ||
+      missing.length
+    ) {
+      scenarioStatus = "inconclusive";
+      for (const id of missing)
+        issue("warning", "SCENARIO_SCREEN_NOT_INSPECTED", id);
+      issue("warning", "SCENARIO_COVERAGE_INCOMPLETE", scenario.startNodeId);
+    } else {
+      scenarioStatus = "satisfied";
+      const reachable = new Set([scenario.startNodeId]);
+      const adjacency = new Map<string, Set<string>>();
+      for (const edge of edges) {
+        const source = nodes.find((n) => n.id === edge.sourceId)?.screenId;
+        if (!source || !edge.supported || !edge.destinationId) continue;
+        const destinations = adjacency.get(source) ?? new Set<string>();
+        destinations.add(edge.destinationId);
+        adjacency.set(source, destinations);
+      }
+      const todo = [scenario.startNodeId];
+      while (todo.length)
+        for (const target of adjacency.get(todo.shift()!) ?? []) {
+          if (!reachable.has(target)) {
+            reachable.add(target);
+            todo.push(target);
+          }
+        }
+      for (const id of scenario.expectedScreenIds)
+        if (!reachable.has(id)) {
+          issue("warning", "UNREACHABLE_SCREEN", id);
+          scenarioStatus = "warnings";
+        }
+      for (const id of scenario.requireExitNodeIds) {
+        const exits = edges.filter(
+          (e) =>
+            e.supported &&
+            nodes.find((n) => n.id === e.sourceId)?.screenId === id
+        );
+        // Opening an overlay does not leave the underlying screen.
+        if (
+          exits.some(
+            (e) =>
+              e.type === "NODE" &&
+              e.navigation === "NAVIGATE" &&
+              e.destinationId !== id
+          )
+        )
+          continue;
+        if (exits.some((e) => e.type === "BACK" || e.type === "CLOSE")) {
+          issue("warning", "EXIT_REQUIRES_PLAYBACK_HISTORY", id);
+          if (scenarioStatus === "satisfied")
+            scenarioStatus = "requires_playback";
+        } else {
+          issue("warning", "MISSING_EXIT_PATH", id);
+          scenarioStatus = "warnings";
+        }
+      }
+    }
+  }
   const result = {
+    scenario: scenario ?? null,
+    scenarioStatus,
     pageId: page.id,
     pageFingerprint,
     flowStartingPoints: page.flowStartingPoints,
@@ -371,11 +466,17 @@ export async function prototypeTool(
     prototypeUrl: _url,
     ...readArgs
   } = playback ?? input;
+  if (
+    playback?.scenario &&
+    playback.scenario.startNodeId !== playback.startNodeId
+  )
+    throw new BridgeError("SCENARIO_START_MISMATCH");
   const graph = await readPrototype(api, readArgs, snapshot);
   if (method === "read_prototype") return graph;
   const structuralStatus = graph.issues.some((i) => i.severity === "error")
     ? "invalid"
     : !graph.complete ||
+        graph.scenarioStatus === "inconclusive" ||
         graph.issues.some((i) => i.code === "UNSUPPORTED_REACTION")
       ? "inconclusive"
       : "valid";
@@ -413,6 +514,8 @@ export async function prototypeTool(
   }
   const stepsComplete = steps.length === candidates.length;
   return {
+    scenario: graph.scenario,
+    scenarioStatus: graph.scenarioStatus,
     pageId: graph.pageId,
     flowFingerprint: graph.flowFingerprint,
     complete: graph.complete,
@@ -422,7 +525,10 @@ export async function prototypeTool(
     stepsComplete,
     structuralStatus,
     playbackStatus: "not_run",
-    readyForPlayback: structuralStatus === "valid" && stepsComplete,
+    readyForPlayback:
+      structuralStatus === "valid" &&
+      stepsComplete &&
+      graph.scenarioStatus !== "warnings",
     startNodeId: start.id,
     startName: start.name,
     prototypeUrl: playback.prototypeUrl ?? null,

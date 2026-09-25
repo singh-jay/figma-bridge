@@ -2,17 +2,17 @@
 
 // src/cli/index.ts
 import {
-  mkdirSync as mkdirSync2,
-  existsSync as existsSync3,
-  readFileSync as readFileSync3,
-  writeFileSync as writeFileSync3,
+  mkdirSync as mkdirSync3,
+  existsSync as existsSync4,
+  readFileSync as readFileSync4,
+  writeFileSync as writeFileSync4,
   cpSync,
-  realpathSync as realpathSync3,
-  lstatSync as lstatSync2,
+  realpathSync as realpathSync4,
+  lstatSync as lstatSync3,
   appendFileSync as appendFileSync2
 } from "node:fs";
 import { homedir } from "node:os";
-import { resolve as resolve3, join as join4 } from "node:path";
+import { resolve as resolve4, join as join5 } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 
@@ -98,7 +98,13 @@ var prototypeOperations = [
   })
 ];
 var prototypeOperationSchema = v.variant("type", prototypeOperations);
+var scenarioSchema = v.strictObject({
+  startNodeId: realId,
+  expectedScreenIds: v.optional(v.pipe(v.array(realId), v.maxLength(100)), []),
+  requireExitNodeIds: v.optional(v.pipe(v.array(realId), v.maxLength(100)), [])
+});
 var prototypeReadEntries = {
+  scenario: v.optional(scenarioSchema),
   sessionId: id,
   pageId: realId,
   nodeIds: v.pipe(v.array(realId), v.minLength(1), v.maxLength(24)),
@@ -467,8 +473,8 @@ import {
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 var secret = () => randomBytes(32).toString("hex");
-function privateDirectory(directory) {
-  const target = resolve(directory);
+function privateDirectory(directory2) {
+  const target = resolve(directory2);
   const parent = dirname(target);
   if (!existsSync(parent)) privateDirectory(parent);
   if (existsSync(target)) {
@@ -480,9 +486,9 @@ function privateDirectory(directory) {
   chmodSync(target, 448);
   return target;
 }
-function credential(directory, create = false) {
-  if (create) privateDirectory(directory);
-  const file = join(directory, "credential");
+function credential(directory2, create = false) {
+  if (create) privateDirectory(directory2);
+  const file = join(directory2, "credential");
   if (!existsSync(file) && create) {
     const fd = openSync(file, "wx", 384);
     try {
@@ -493,7 +499,7 @@ function credential(directory, create = false) {
   }
   if (!existsSync(file))
     throw new Error("BRIDGE_NOT_INITIALIZED: start the bridge first");
-  if (realpathSync(directory) !== resolve(directory) || lstatSync(file).isSymbolicLink() || !lstatSync(file).isFile())
+  if (realpathSync(directory2) !== resolve(directory2) || lstatSync(file).isSymbolicLink() || !lstatSync(file).isFile())
     throw new Error("UNSAFE_CREDENTIAL_FILE");
   if ((lstatSync(file).mode & 63) !== 0)
     throw new Error("CREDENTIAL_PERMISSIONS_MUST_BE_0600");
@@ -503,11 +509,11 @@ function credential(directory, create = false) {
 }
 
 // src/bridge/artifacts.ts
-function saveArtifact(directory, bytes, mime, expectedHash) {
+function saveArtifact(directory2, bytes, mime, expectedHash) {
   if (bytes.length > 10 * 1024 * 1024) throw new Error("EXPORT_TOO_LARGE");
   const sha2562 = createHash("sha256").update(bytes).digest("hex");
   if (sha2562 !== expectedHash) throw new Error("EXPORT_HASH_MISMATCH");
-  const root = privateDirectory(directory), ext = mime === "image/png" ? "png" : mime === "image/svg+xml" ? "svg" : "bin";
+  const root = privateDirectory(directory2), ext = mime === "image/png" ? "png" : mime === "image/svg+xml" ? "svg" : "bin";
   const path = join2(root, `${crypto.randomUUID()}.${ext}`), fd = openSync2(path, "wx", 384);
   try {
     writeFileSync2(fd, bytes);
@@ -603,15 +609,15 @@ async function createTransport(options) {
             upgraded = true;
             const wrapped = {
               data,
-              send(text2) {
+              send(text3) {
                 if (ws.readyState !== WebSocket.OPEN || ws.bufferedAmount > MAX_MESSAGE * 2) {
                   ws.close(1013, "Backpressure");
                   return 0;
                 }
-                ws.send(text2, (error) => {
+                ws.send(text3, (error) => {
                   if (error) ws.terminate();
                 });
-                return Buffer.byteLength(text2);
+                return Buffer.byteLength(text3);
               },
               close(code, reason) {
                 ws.close(code, reason);
@@ -645,7 +651,7 @@ Content-Length: 0\r
       if (!upgraded) rawSocket.destroy();
     }
   });
-  await new Promise((resolve4, reject) => {
+  await new Promise((resolve5, reject) => {
     http.once("error", reject);
     http.listen(options.port, "127.0.0.1", () => {
       const address = http.address();
@@ -653,17 +659,17 @@ Content-Length: 0\r
         return reject(new Error("LISTEN_FAILED"));
       port2 = address.port;
       http.removeListener("error", reject);
-      resolve4();
+      resolve5();
     });
   });
   return {
     port: port2,
     async stop() {
       for (const ws of sockets.clients) ws.terminate();
-      await new Promise((resolve4) => sockets.close(() => resolve4()));
+      await new Promise((resolve5) => sockets.close(() => resolve5()));
       const closed = new Promise(
-        (resolve4, reject) => http.close(
-          (error) => error && error.code !== "ERR_SERVER_NOT_RUNNING" ? reject(error) : resolve4()
+        (resolve5, reject) => http.close(
+          (error) => error && error.code !== "ERR_SERVER_NOT_RUNNING" ? reject(error) : resolve5()
         )
       );
       http.closeAllConnections();
@@ -712,12 +718,12 @@ async function startBridge(options) {
     if (Buffer.byteLength(JSON.stringify(params)) > MAX_RESULT)
       throw new BridgeError("COMMAND_TOO_LARGE");
     const requestId = crypto.randomUUID();
-    return new Promise((resolve4, reject) => {
+    return new Promise((resolve5, reject) => {
       const timer = setTimeout(() => {
         pending.delete(requestId);
         reject(new BridgeError("RESPONSE_TIMEOUT"));
       }, timeout);
-      pending.set(requestId, { peerId: peer.id, resolve: resolve4, reject, timer });
+      pending.set(requestId, { peerId: peer.id, resolve: resolve5, reject, timer });
       const sent = peer.socket.send(
         JSON.stringify({
           type: "command",
@@ -1316,13 +1322,13 @@ async function callWithContext(client, project2, name, args) {
     );
     if (result.isError || !repository) return result;
     const context = { ...result.structuredContent, repository };
-    const text2 = JSON.stringify(context);
-    if (Buffer.byteLength(text2) > MAX_RESULT)
+    const text3 = JSON.stringify(context);
+    if (Buffer.byteLength(text3) > MAX_RESULT)
       throw new Error("RESULT_TOO_LARGE");
     return {
       ...result,
       structuredContent: context,
-      content: [{ type: "text", text: text2 }]
+      content: [{ type: "text", text: text3 }]
     };
   } catch (error) {
     return {
@@ -1363,6 +1369,227 @@ async function runMcp(project2, stateDirectory, port2) {
   await server.connect(new StdioServerTransport());
 }
 
+// src/cli/prototype-report.ts
+import { createHash as createHash2, randomUUID } from "node:crypto";
+import {
+  existsSync as existsSync3,
+  lstatSync as lstatSync2,
+  mkdirSync as mkdirSync2,
+  readFileSync as readFileSync3,
+  realpathSync as realpathSync3,
+  writeFileSync as writeFileSync3,
+  openSync as openSync4,
+  closeSync as closeSync4,
+  fstatSync as fstatSync2,
+  constants as constants2
+} from "node:fs";
+import { join as join4, resolve as resolve3 } from "node:path";
+import * as v4 from "valibot";
+var text2 = v4.pipe(v4.string(), v4.minLength(1), v4.maxLength(4096));
+var identity = v4.pipe(v4.string(), v4.minLength(1), v4.maxLength(200));
+var stepSchema = v4.looseObject({
+  sourceId: identity,
+  reactionIndex: v4.pipe(v4.number(), v4.integer(), v4.minValue(0)),
+  actionIndex: v4.pipe(v4.number(), v4.integer(), v4.minValue(0))
+});
+var preparedSchema = v4.looseObject({
+  sessionId: identity,
+  generation: identity,
+  pageId: identity,
+  startNodeId: identity,
+  flowFingerprint: identity,
+  structuralStatus: v4.picklist(["valid", "invalid", "inconclusive"]),
+  scenarioStatus: v4.optional(
+    v4.picklist([
+      "not_requested",
+      "requires_playback",
+      "satisfied",
+      "warnings",
+      "inconclusive"
+    ])
+  ),
+  complete: v4.boolean(),
+  stepsComplete: v4.boolean(),
+  steps: v4.pipe(v4.array(stepSchema), v4.maxLength(1e3))
+});
+var prototypeReportSchema = v4.strictObject({
+  prepared: preparedSchema,
+  after: v4.optional(
+    v4.looseObject({
+      sessionId: identity,
+      generation: identity,
+      flowFingerprint: identity
+    })
+  ),
+  environment: v4.strictObject({
+    controllerAvailable: v4.boolean(),
+    authenticated: v4.boolean(),
+    pluginConnected: v4.boolean(),
+    documentIdentity: v4.picklist([
+      "confirmed",
+      "ambiguous",
+      "mismatch",
+      "unknown"
+    ]),
+    observedStartNodeId: v4.optional(identity),
+    viewport: v4.optional(
+      v4.strictObject({
+        width: v4.pipe(v4.number(), v4.integer(), v4.minValue(1)),
+        height: v4.pipe(v4.number(), v4.integer(), v4.minValue(1))
+      })
+    )
+  }),
+  requiredChecks: v4.optional(v4.pipe(v4.array(identity), v4.maxLength(100)), []),
+  checks: v4.pipe(
+    v4.array(
+      v4.strictObject({
+        id: identity,
+        action: text2,
+        expected: text2,
+        observed: text2,
+        status: v4.picklist(["passed", "failed", "blocked", "inconclusive"]),
+        observedAt: v4.pipe(v4.string(), v4.isoTimestamp()),
+        screenshots: v4.pipe(v4.array(text2), v4.maxLength(4)),
+        elapsedMs: v4.optional(
+          v4.pipe(v4.number(), v4.minValue(0), v4.maxValue(864e5))
+        )
+      })
+    ),
+    v4.maxLength(1e3)
+  )
+});
+var interactionCheckId = (step) => `${step.sourceId}/${step.reactionIndex}/${step.actionIndex}`;
+function evaluatePrototypeRun(input) {
+  const { prepared: before, after, environment: env, checks } = input;
+  const reasons = [];
+  const required = [
+    .../* @__PURE__ */ new Set([
+      ...before.steps.map(interactionCheckId),
+      ...input.requiredChecks
+    ])
+  ];
+  const covered = new Set(
+    checks.filter((c) => c.status === "passed").map((c) => c.id)
+  );
+  const untested = required.filter((id3) => !covered.has(id3));
+  if (new Set(checks.map((c) => c.id)).size !== checks.length)
+    throw new Error("DUPLICATE_CHECK_ID");
+  if (!env.controllerAvailable) reasons.push("CONTROLLER_UNAVAILABLE");
+  if (!env.authenticated) reasons.push("LOGIN_REQUIRED");
+  if (!env.pluginConnected) reasons.push("PLUGIN_DISCONNECTED");
+  if (env.documentIdentity !== "confirmed")
+    reasons.push(`DOCUMENT_${env.documentIdentity.toUpperCase()}`);
+  if (env.observedStartNodeId !== before.startNodeId)
+    reasons.push("START_NOT_CONFIRMED");
+  let status = reasons.length ? "blocked" : "passed";
+  if (status !== "blocked") {
+    if (checks.some((c) => c.status === "failed")) {
+      status = "failed";
+      reasons.push("CHECK_FAILED");
+    } else if (checks.some((c) => c.status === "blocked")) {
+      status = "blocked";
+      reasons.push("CHECK_BLOCKED");
+    } else if (checks.some((c) => c.status === "inconclusive")) {
+      status = "inconclusive";
+      reasons.push("CHECK_INCONCLUSIVE");
+    }
+    if (!after || after.flowFingerprint !== before.flowFingerprint || after.sessionId !== before.sessionId || after.generation !== before.generation) {
+      if (status === "passed") status = "inconclusive";
+      reasons.push(
+        after ? "FLOW_OR_SESSION_CHANGED" : "POST_RUN_READ_REQUIRED"
+      );
+    }
+    if (!before.complete || !before.stepsComplete || before.structuralStatus !== "valid" || before.scenarioStatus === "warnings" || before.scenarioStatus === "inconclusive") {
+      if (status === "passed") status = "inconclusive";
+      reasons.push("STRUCTURE_NOT_VERIFIED");
+    }
+    if (untested.length || !checks.length || !env.viewport || checks.some((c) => c.status === "passed" && !c.screenshots.length)) {
+      if (status === "passed") status = "inconclusive";
+      reasons.push("EVIDENCE_OR_COVERAGE_INCOMPLETE");
+    }
+  }
+  return {
+    status,
+    reasons,
+    coverage: { required, passed: [...covered], untested }
+  };
+}
+function directory(path) {
+  if (existsSync3(path)) {
+    if (!lstatSync2(path).isDirectory() || realpathSync3(path) !== path)
+      throw new Error("UNSAFE_EVIDENCE_DIRECTORY");
+  } else mkdirSync2(path, { mode: 448 });
+}
+function savePrototypeRun(project2, raw) {
+  const input = v4.parse(prototypeReportSchema, raw);
+  const outcome = evaluatePrototypeRun(input);
+  const root = realpathSync3(project2);
+  const base = join4(root, ".figma-bridge");
+  directory(base);
+  const runs = join4(base, "prototype-runs");
+  directory(runs);
+  const sources = [...new Set(input.checks.flatMap((c) => c.screenshots))];
+  if (sources.length > 100) throw new Error("TOO_MANY_SCREENSHOTS");
+  let total = 0;
+  const files = sources.map((source) => {
+    const path2 = resolve3(root, source);
+    if (realpathSync3(path2) !== path2) throw new Error("UNSAFE_SCREENSHOT_PATH");
+    const fd = openSync4(path2, constants2.O_RDONLY | constants2.O_NOFOLLOW);
+    try {
+      const stat = fstatSync2(fd);
+      if (!stat.isFile() || stat.size > 10 * 1024 * 1024)
+        throw new Error("INVALID_SCREENSHOT_SIZE");
+      const bytes = readFileSync3(fd);
+      total += bytes.length;
+      if (total > 100 * 1024 * 1024) throw new Error("EVIDENCE_TOO_LARGE");
+      const png = bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+      const jpg = bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255;
+      if (!png && !jpg) throw new Error("SCREENSHOT_MUST_BE_PNG_OR_JPEG");
+      return {
+        source,
+        bytes,
+        extension: png ? "png" : "jpg",
+        sha256: createHash2("sha256").update(bytes).digest("hex")
+      };
+    } finally {
+      closeSync4(fd);
+    }
+  });
+  const runId = randomUUID(), output = join4(runs, runId);
+  directory(output);
+  const artifacts = files.map((file, index2) => {
+    const path2 = `screenshot-${index2 + 1}.${file.extension}`;
+    writeFileSync3(join4(output, path2), file.bytes, { flag: "wx", mode: 384 });
+    return {
+      source: file.source,
+      path: path2,
+      sha256: file.sha256,
+      bytes: file.bytes.length
+    };
+  });
+  const report = {
+    format: "figma-bridge.prototype-run",
+    version: 1,
+    runId,
+    recordedAt: (/* @__PURE__ */ new Date()).toISOString(),
+    ...input,
+    ...outcome,
+    checks: input.checks.map((c) => ({
+      ...c,
+      screenshots: c.screenshots.map(
+        (source) => artifacts.find((a) => a.source === source).path
+      )
+    })),
+    artifacts: artifacts.map(({ source, ...artifact }) => artifact)
+  };
+  const path = join4(output, "report.json");
+  writeFileSync3(path, JSON.stringify(report, null, 2) + "\n", {
+    flag: "wx",
+    mode: 384
+  });
+  return { path, runId, ...outcome, screenshots: artifacts.length };
+}
+
 // src/cli/index.ts
 var packageRoot = fileURLToPath(new URL("../../", import.meta.url));
 var { values, positionals } = parseArgs({
@@ -1373,16 +1600,17 @@ var { values, positionals } = parseArgs({
     port: { type: "string" },
     "skill-dir": { type: "string" },
     args: { type: "string" },
+    input: { type: "string" },
     force: { type: "boolean" },
     help: { type: "boolean", short: "h" }
   }
 });
-var project = realpathSync3(resolve3(values.project ?? process.cwd()));
-var defaultState = process.platform === "darwin" ? join4(homedir(), "Library/Application Support/Figma Bridge") : process.platform === "win32" ? join4(process.env.LOCALAPPDATA ?? homedir(), "Figma Bridge") : join4(
-  process.env.XDG_STATE_HOME ?? join4(homedir(), ".local/state"),
+var project = realpathSync4(resolve4(values.project ?? process.cwd()));
+var defaultState = process.platform === "darwin" ? join5(homedir(), "Library/Application Support/Figma Bridge") : process.platform === "win32" ? join5(process.env.LOCALAPPDATA ?? homedir(), "Figma Bridge") : join5(
+  process.env.XDG_STATE_HOME ?? join5(homedir(), ".local/state"),
   "figma-bridge"
 );
-var state = resolve3(values["state-dir"] ?? defaultState);
+var state = resolve4(values["state-dir"] ?? defaultState);
 var port = Number(values.port ?? PORT);
 var action = values.help ? "help" : positionals[0] ?? "help";
 var help = `Figma Bridge \u2014 local Figma tools for coding agents
@@ -1394,6 +1622,7 @@ var help = `Figma Bridge \u2014 local Figma tools for coding agents
   figma-bridge mcp --project PATH         MCP stdio adapter for a project
   figma-bridge inspect TOOL --args JSON   Call a read-only tool (explicit session IDs)
   figma-bridge verify                    Check MCP tools, instructions and sessions
+  figma-bridge prototype-report --input JSON_FILE  Validate and save local playback evidence
   figma-bridge install-skill              Install the generic figma-bridge skill
 
 Common: --state-dir PATH, --port NUMBER (default 3846).
@@ -1443,34 +1672,34 @@ try {
       action === "pair" ? (await service("pair", "POST")).token : JSON.stringify(health, null, 2)
     );
   } else if (action === "init") {
-    const configPath = join4(project, "figma-bridge.config.json");
-    if (!existsSync3(configPath))
-      writeFileSync3(
+    const configPath = join5(project, "figma-bridge.config.json");
+    if (!existsSync4(configPath))
+      writeFileSync4(
         configPath,
         JSON.stringify({ version: 1, targets: {} }, null, 2) + "\n",
         { flag: "wx" }
       );
-    const local = join4(project, ".figma-bridge");
-    const plugin = join4(local, "plugin");
-    if (existsSync3(plugin) && !values.force)
+    const local = join5(project, ".figma-bridge");
+    const plugin = join5(local, "plugin");
+    if (existsSync4(plugin) && !values.force)
       throw new Error("PLUGIN_ALREADY_EXISTS: use init --force to refresh it");
-    if (existsSync3(local) && realpathSync3(local) !== local)
+    if (existsSync4(local) && realpathSync4(local) !== local)
       throw new Error("UNSAFE_PLUGIN_DIRECTORY");
-    if (existsSync3(plugin) && realpathSync3(plugin) !== plugin)
+    if (existsSync4(plugin) && realpathSync4(plugin) !== plugin)
       throw new Error("UNSAFE_PLUGIN_DIRECTORY");
-    mkdirSync2(plugin, { recursive: true });
+    mkdirSync3(plugin, { recursive: true });
     for (const name of ["code.js", "manifest.json"]) {
-      const output = join4(plugin, name);
-      if (existsSync3(output) && realpathSync3(output) !== output)
+      const output = join5(plugin, name);
+      if (existsSync4(output) && realpathSync4(output) !== output)
         throw new Error("UNSAFE_PLUGIN_FILE");
-      const input = readFileSync3(join4(packageRoot, "plugin", name), "utf8");
-      writeFileSync3(
+      const input = readFileSync4(join5(packageRoot, "plugin", name), "utf8");
+      writeFileSync4(
         output,
         name === "code.js" ? input.replaceAll("__FIGMA_BRIDGE_PORT__", String(port)) : input.replaceAll(":3846", `:${port}`)
       );
     }
     const args = [
-      join4(packageRoot, "dist/cli/index.js"),
+      join5(packageRoot, "dist/cli/index.js"),
       "mcp",
       "--project",
       project,
@@ -1482,12 +1711,12 @@ try {
     const snippet = {
       mcpServers: { figma_bridge: { command: process.execPath, args } }
     };
-    writeFileSync3(
-      join4(local, "mcp.json"),
+    writeFileSync4(
+      join5(local, "mcp.json"),
       JSON.stringify(snippet, null, 2) + "\n"
     );
-    writeFileSync3(
-      join4(local, "codex.toml"),
+    writeFileSync4(
+      join5(local, "codex.toml"),
       `[mcp_servers.figma_bridge]
 command = ${JSON.stringify(process.execPath)}
 args = ${JSON.stringify(args)}
@@ -1495,12 +1724,12 @@ startup_timeout_sec = 20
 tool_timeout_sec = 120
 `
     );
-    const ignorePath = join4(project, ".gitignore");
+    const ignorePath = join5(project, ".gitignore");
     let ignoreMessage = "Add .figma-bridge/ to your project's .gitignore.";
-    if (existsSync3(ignorePath)) {
-      if (!lstatSync2(ignorePath).isFile())
+    if (existsSync4(ignorePath)) {
+      if (!lstatSync3(ignorePath).isFile())
         throw new Error("UNSAFE_GITIGNORE_FILE: expected a regular file");
-      const content = readFileSync3(ignorePath, "utf8");
+      const content = readFileSync4(ignorePath, "utf8");
       const alreadyListed = content.split(/\r?\n/).some((line) => /^\/?\.figma-bridge\/?$/.test(line.trimEnd()));
       if (!alreadyListed) {
         const newline = content.includes("\r\n") ? "\r\n" : "\n";
@@ -1510,27 +1739,37 @@ tool_timeout_sec = 120
       ignoreMessage = alreadyListed ? ".figma-bridge/ is already listed in .gitignore." : "Added .figma-bridge/ to .gitignore.";
     }
     console.log(
-      `Import ${join4(plugin, "manifest.json")} in Figma desktop.
-Merge ${join4(local, "mcp.json")} or ${join4(local, "codex.toml")} into your MCP client configuration.
+      `Import ${join5(plugin, "manifest.json")} in Figma desktop.
+Merge ${join5(local, "mcp.json")} or ${join5(local, "codex.toml")} into your MCP client configuration.
 ${ignoreMessage}
 Edit ${configPath} for your framework, component, token and guidance paths.
 Then run figma-bridge start and figma-bridge pair.`
     );
-  } else if (action === "install-skill") {
-    const root = resolve3(
-      values["skill-dir"] ?? join4(process.env.CODEX_HOME ?? join4(homedir(), ".codex"), "skills")
+  } else if (action === "prototype-report") {
+    if (!values.input) throw new Error("REPORT_INPUT_REQUIRED");
+    const input = resolve4(values.input);
+    if (lstatSync3(input).size > 2 * 1024 * 1024)
+      throw new Error("REPORT_INPUT_TOO_LARGE");
+    console.log(
+      JSON.stringify(
+        savePrototypeRun(project, JSON.parse(readFileSync4(input, "utf8")))
+      )
     );
-    const target = join4(root, "figma-bridge");
-    if (existsSync3(target) && !values.force)
+  } else if (action === "install-skill") {
+    const root = resolve4(
+      values["skill-dir"] ?? join5(process.env.CODEX_HOME ?? join5(homedir(), ".codex"), "skills")
+    );
+    const target = join5(root, "figma-bridge");
+    if (existsSync4(target) && !values.force)
       throw new Error("SKILL_ALREADY_EXISTS: use --force to replace it");
-    if (existsSync3(target) && realpathSync3(target) !== target)
+    if (existsSync4(target) && realpathSync4(target) !== target)
       throw new Error("UNSAFE_SKILL_DIRECTORY");
-    cpSync(join4(packageRoot, "skills/figma-bridge"), target, {
+    cpSync(join5(packageRoot, "skills/figma-bridge"), target, {
       recursive: true,
       force: Boolean(values.force),
       errorOnExist: !values.force
     });
-    console.log(`Installed ${join4(target, "SKILL.md")}`);
+    console.log(`Installed ${join5(target, "SKILL.md")}`);
   } else if (action === "inspect" || action === "verify") {
     const client = await upstreamClient(state, port);
     try {

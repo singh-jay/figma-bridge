@@ -389,3 +389,86 @@ test("prototype output budgets count UTF-8 bytes and report incomplete coverage"
     graph.issues.some((issue: any) => issue.code === "READ_BUDGET_EXCEEDED")
   ).toBe(true);
 });
+
+test("scenario warnings distinguish unreachable screens, intentional terminals and history-dependent exits", async () => {
+  const f = fixture();
+  f.button.reactions = [nav(f.b.id)];
+  const read = f.read({
+    nodeIds: [f.a.id, f.overlay.id],
+    scenario: {
+      startNodeId: f.a.id,
+      expectedScreenIds: [f.b.id, f.overlay.id],
+      requireExitNodeIds: [f.b.id],
+    },
+  });
+  const result = (await f.engine.dispatch("validate_prototype", read)) as any;
+  expect(result.issues.map((i: any) => i.code)).toContain("UNREACHABLE_SCREEN");
+  expect(result.issues.map((i: any) => i.code)).toContain("MISSING_EXIT_PATH");
+  expect(result.scenarioStatus).toBe("warnings");
+  const terminal = (await f.engine.dispatch(
+    "validate_prototype",
+    f.read({ scenario: { startNodeId: f.a.id, expectedScreenIds: [f.b.id] } })
+  )) as any;
+  expect(terminal.scenarioStatus).toBe("satisfied");
+  f.b.reactions = [
+    { trigger: { type: "ON_CLICK" }, actions: [{ type: "BACK" }] },
+  ];
+  const back = (await f.engine.dispatch(
+    "validate_prototype",
+    f.read({ scenario: { startNodeId: f.a.id, requireExitNodeIds: [f.b.id] } })
+  )) as any;
+  expect(back.scenarioStatus).toBe("requires_playback");
+  expect(back.structuralStatus).toBe("valid");
+  expect(back.issues.map((i: any) => i.code)).toContain(
+    "EXIT_REQUIRES_PLAYBACK_HISTORY"
+  );
+  f.b.reactions = [nav(f.a.id)];
+  const cycle = (await f.engine.dispatch(
+    "validate_prototype",
+    f.read({ scenario: { startNodeId: f.a.id, requireExitNodeIds: [f.b.id] } })
+  )) as any;
+  expect(cycle.scenarioStatus).toBe("satisfied");
+});
+
+test("partial/unsupported scenario coverage never claims an unreachable or missing exit", async () => {
+  const f = fixture();
+  f.button.reactions = [nav(f.b.id)];
+  for (const extra of [
+    { maxNodes: 1 },
+    { nodeIds: [f.a.id], traverseDestinations: false },
+    { nodeIds: [f.a.id, f.b.id], maxEdges: 1 },
+  ]) {
+    f.b.reactions = [nav(f.a.id)];
+    const result = (await f.engine.dispatch(
+      "validate_prototype",
+      f.read({
+        ...extra,
+        scenario: {
+          startNodeId: f.a.id,
+          expectedScreenIds: [f.b.id],
+          requireExitNodeIds: [f.b.id],
+        },
+      })
+    )) as any;
+    expect(result.scenarioStatus).toBe("inconclusive");
+    expect(
+      result.issues.some((i: any) =>
+        ["UNREACHABLE_SCREEN", "MISSING_EXIT_PATH"].includes(i.code)
+      )
+    ).toBe(false);
+  }
+});
+
+test("playback rejects expectations validated from a different starting screen", async () => {
+  const f = fixture();
+  await expect(
+    f.engine.dispatch(
+      "prepare_prototype_playback",
+      f.read({
+        nodeIds: [f.a.id, f.b.id],
+        startNodeId: f.a.id,
+        scenario: { startNodeId: f.b.id, expectedScreenIds: [f.b.id] },
+      })
+    )
+  ).rejects.toThrow("SCENARIO_START_MISMATCH");
+});
