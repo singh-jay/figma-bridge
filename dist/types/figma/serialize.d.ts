@@ -27,7 +27,7 @@ export declare function buildSelectionExport(node: SceneNode, source: SelectionE
         selection: {
             id: string;
             name: string;
-            type: "FRAME" | "TEXT" | "RECTANGLE" | "INSTANCE" | "SLICE" | "GROUP" | "COMPONENT_SET" | "COMPONENT" | "BOOLEAN_OPERATION" | "VECTOR" | "STAR" | "LINE" | "ELLIPSE" | "POLYGON" | "TEXT_PATH" | "TRANSFORM_GROUP" | "STICKY" | "CONNECTOR" | "SHAPE_WITH_TEXT" | "CODE_BLOCK" | "STAMP" | "WIDGET" | "EMBED" | "LINK_UNFURL" | "MEDIA" | "SECTION" | "HIGHLIGHT" | "WASHI_TAPE" | "TABLE" | "SLIDE" | "SLIDE_ROW" | "SLIDE_GRID" | "SLOT" | "INTERACTIVE_SLIDE_ELEMENT";
+            type: "FRAME" | "TEXT" | "RECTANGLE" | "INSTANCE" | "GROUP" | "LINE" | "COMPONENT" | "VECTOR" | "STAR" | "POLYGON" | "WASHI_TAPE" | "STAMP" | "HIGHLIGHT" | "SLIDE_ROW" | "COMPONENT_SET" | "BOOLEAN_OPERATION" | "TRANSFORM_GROUP" | "SECTION" | "SLIDE" | "SLIDE_GRID" | "SLICE" | "ELLIPSE" | "TEXT_PATH" | "STICKY" | "CONNECTOR" | "SHAPE_WITH_TEXT" | "CODE_BLOCK" | "WIDGET" | "EMBED" | "LINK_UNFURL" | "MEDIA" | "TABLE" | "SLOT" | "INTERACTIVE_SLIDE_ELEMENT";
         };
         document: {
             id: string;

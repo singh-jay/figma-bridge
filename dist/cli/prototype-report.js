@@ -19,6 +19,7 @@ var identity = v.pipe(v.string(), v.minLength(1), v.maxLength(200));
 var stepSchema = v.looseObject({
   sourceId: identity,
   reactionIndex: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  actionPath: v.optional(identity),
   actionIndex: v.pipe(v.number(), v.integer(), v.minValue(0))
 });
 var preparedSchema = v.looseObject({
@@ -87,7 +88,7 @@ var prototypeReportSchema = v.strictObject({
     v.maxLength(1e3)
   )
 });
-var interactionCheckId = (step) => `${step.sourceId}/${step.reactionIndex}/${step.actionIndex}`;
+var interactionCheckId = (step) => `${step.sourceId}/${step.reactionIndex}/${step.actionPath ?? step.actionIndex}`;
 function evaluatePrototypeRun(input) {
   const { prepared: before, after, environment: env, checks } = input;
   const reasons = [];

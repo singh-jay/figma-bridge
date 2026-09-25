@@ -2,7 +2,7 @@
 
 ## Scope and capabilities
 
-Select an explicit session, page and starting screen. Check `figma_bridge_sessions` for the peer’s supported tools and operations. Package 0.2/protocol 2 is required. Report unknown account availability honestly; API support is not proof of plan entitlement. Do not enable private APIs, switch bridges or infer a file key from its name.
+Select an explicit session, page and starting screen. Check `figma_bridge_sessions` for the peer’s supported tools and operations. Package 0.3/protocol 3 is required. See [advanced prototypes](advanced-prototypes.md) for hover/drag/key/delay, Smart Animate, variant transitions, variables, expressions and conditionals. Report unknown account availability honestly; API support is not proof of plan entitlement. Do not enable private APIs, switch bridges or infer a file key from its name.
 
 Read `figma_bridge_read_prototype` with `sessionId`, `pageId`, `nodeIds` and `traverseDestinations: true` when the requested scenario includes linked destinations. Defaults are 100 nodes and 200 edges; caps are 500 and 1,000. Reads preserve raw reactions, including unsupported data. Follow pending IDs with scoped reads, keeping incomplete coverage explicit; edge-budget exhaustion may require a larger bounded budget. Do not treat separate reads as one atomic snapshot.
 
@@ -45,7 +45,7 @@ Supported operation shapes inside `operations`:
 }
 ```
 
-Omit `index` to append; supply an existing zero-based `index` to replace exactly one reaction. `remove_reaction` requires that index plus the same guard fields. Unrelated entries stay in place. Read first to avoid duplicate click handlers. The sole action can instead be `{ "type": "BACK" }` or `{ "type": "CLOSE" }`; `navigation: "OVERLAY"` opens a destination overlay. A dissolve transition is `{ "type": "DISSOLVE", "duration": 0.2, "easing": { "type": "EASE_OUT" } }` (seconds, maximum 10). Allowed easing types: `LINEAR`, `EASE_IN`, `EASE_OUT`, `EASE_IN_AND_OUT`.
+Omit `index` to append; supply an existing zero-based `index` to replace exactly one reaction. `remove_reaction` requires that index plus the same guard fields. Unrelated entries stay in place. Read first to avoid duplicate click handlers. A basic action can instead be `{ "type": "BACK" }` or `{ "type": "CLOSE" }`; `navigation: "OVERLAY"` opens a destination overlay. A dissolve transition is `{ "type": "DISSOLVE", "duration": 0.2, "easing": { "type": "EASE_OUT" } }` (seconds, maximum 10). Allowed easing types: `LINEAR`, `EASE_IN`, `EASE_OUT`, `EASE_IN_AND_OUT`.
 
 `upsert_flow_start` takes page `nodeId`, fresh page `expectedFingerprint`, `startNodeId` and `name`; `remove_flow_start` omits `name`. Both require a page lease and preserve other starts. Destinations must be same-page top-level frames, components or instances, optionally within sections.
 
@@ -91,7 +91,7 @@ The input schema ships as `schema/prototype-report.schema.json`. Provide:
 - `prepared`: the full `prepare_prototype_playback` response, including session/generation.
 - `after`: a fresh response from the same preparation arguments after playback (omit if blocked).
 - `environment`: `controllerAvailable`, `authenticated`, `pluginConnected`, `documentIdentity` (`confirmed`, `ambiguous`, `mismatch`, `unknown`), `observedStartNodeId`, and `viewport` width/height. These are observed controller facts, not values to assume.
-- `checks`: observations with `id`, `action`, `expected`, `observed`, `status`, ISO `observedAt`, and `screenshots` (local PNG/JPEG paths, relative to the project or absolute). Use `<sourceId>/<reactionIndex>/<actionIndex>` as each prepared interaction’s ID. Optional `elapsedMs` records a measured duration.
+- `checks`: observations with `id`, `action`, `expected`, `observed`, `status`, ISO `observedAt`, and `screenshots` (local PNG/JPEG paths, relative to the project or absolute). Use `<sourceId>/<reactionIndex>/<actionPath>` when returned, falling back to `<sourceId>/<reactionIndex>/<actionIndex>` for older evidence. Optional `elapsedMs` records a measured duration.
 - `requiredChecks`: optional additional IDs such as `scroll` or `restart`; include corresponding observations in `checks`.
 
 The command copies and hashes screenshots into an immutable run folder under `.figma-bridge/prototype-runs/` and returns its `report.json` path. The saved report contains relative image references, observations, coverage and reasons. Keep `.figma-bridge/` ignored. It rejects duplicate check IDs, symlinked screenshot paths and non-image inputs. Limit: 100 screenshots, 10 MiB each, 100 MiB total.

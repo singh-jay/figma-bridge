@@ -14,6 +14,12 @@ import {
   reactionSchema,
   type PrototypeOperation,
 } from "../protocol/prototype";
+import {
+  checkActions,
+  checkVariant,
+  PrototypeDependencies,
+  flattenActions,
+} from "./prototype-actions";
 
 export function prototypeState(node: BaseNode): Record<string, unknown> {
   const state: Record<string, unknown> = {};
@@ -86,14 +92,22 @@ export async function checkPrototypeOperation(
     if (op.index !== undefined && op.index >= node.reactions.length)
       throw new BridgeError("REACTION_INDEX_NOT_FOUND");
     if (op.type === "upsert_reaction") {
-      for (const action of op.reaction.actions)
-        if (action.type === "NODE") {
-          const destination = await find(api, action.destinationId);
-          if (pageOf(destination)?.id !== pageOf(node)?.id)
+      const deps = new PrototypeDependencies(api);
+      await checkActions(
+        api,
+        node,
+        op.reaction.actions,
+        deps,
+        async (source, destination, navigation) => {
+          if (pageOf(destination)?.id !== pageOf(source)?.id)
             throw new BridgeError("PROTOTYPE_CROSS_PAGE");
-          if (!screen(destination))
+          if (navigation === "CHANGE_TO")
+            await checkVariant(api, source, destination);
+          else if (!screen(destination))
             throw new BridgeError("PROTOTYPE_DESTINATION_NOT_SCREEN");
         }
+      );
+      deps.verify();
     }
   } else if (
     op.type === "upsert_flow_start" ||
@@ -155,6 +169,7 @@ export async function readPrototype(
   const page = await find(api, args.pageId);
   if (page.type !== "PAGE") throw new BridgeError("PROTOTYPE_PAGE_REQUIRED");
   const pageFingerprint = snapshot(page).fingerprint;
+  const dependencies = new PrototypeDependencies(api);
   if (utf8(JSON.stringify(page.flowStartingPoints)).length > 16000)
     throw new BridgeError("FLOW_LIST_TOO_LARGE");
   const queue = [...args.nodeIds],
@@ -188,6 +203,10 @@ export async function readPrototype(
     sourceId: string;
     reactionIndex: number;
     actionIndex: number;
+    actionPath: string;
+    conditional: boolean;
+    trigger: unknown;
+    action: unknown;
     type: string;
     supported: boolean;
     destinationId?: string;
@@ -258,9 +277,47 @@ export async function readPrototype(
         trigger: reaction.trigger,
         actions: actions(reaction),
       };
-      if (!v.safeParse(reactionSchema, canonical).success)
+      const parsed = v.safeParse(reactionSchema, canonical);
+      if (!parsed.success)
         issue("warning", "UNSUPPORTED_REACTION", id, reactionIndex);
-      for (const [actionIndex, action] of actions(reaction).entries()) {
+      else {
+        try {
+          await checkActions(
+            api,
+            node,
+            parsed.output.actions,
+            dependencies,
+            async (source, destination, navigation) => {
+              if (pageOf(destination)?.id !== page.id)
+                throw new BridgeError("CROSS_PAGE_DESTINATION");
+              if (navigation === "CHANGE_TO")
+                await checkVariant(api, source, destination);
+              else if (!screen(destination))
+                throw new BridgeError("DESTINATION_NOT_SCREEN");
+            }
+          );
+        } catch (error) {
+          issue(
+            "error",
+            error instanceof BridgeError
+              ? error.code
+              : "PROTOTYPE_DEPENDENCY_UNAVAILABLE",
+            id,
+            reactionIndex
+          );
+        }
+      }
+      const flattened = flattenActions(actions(reaction));
+      if (flattened.truncated) {
+        complete = false;
+        issue("warning", "ACTION_TRAVERSAL_TRUNCATED", id, reactionIndex);
+      }
+      for (const {
+        actionIndex,
+        actionPath,
+        conditional,
+        action,
+      } of flattened.entries) {
         if (edges.length >= args.maxEdges) {
           complete = false;
           pending.add(id);
@@ -271,8 +328,12 @@ export async function readPrototype(
           sourceId: id,
           reactionIndex,
           actionIndex,
+          actionPath,
+          conditional,
+          trigger: reaction.trigger,
+          action,
           type: String(action.type),
-          supported: v.safeParse(reactionSchema, canonical).success,
+          supported: parsed.success,
           ...(typeof action.destinationId === "string"
             ? { destinationId: action.destinationId }
             : {}),
@@ -350,6 +411,12 @@ export async function readPrototype(
     )
       issue("error", "INVALID_FLOW_START", flow.nodeId);
   }
+  try {
+    dependencies.verify();
+  } catch {
+    complete = false;
+    issue("warning", "PROTOTYPE_RESOURCE_CHANGED", page.id);
+  }
   // Check after every awaited node/flow lookup; no atomic snapshot is implied.
   if (snapshot(page).fingerprint !== pageFingerprint) {
     complete = false;
@@ -385,6 +452,13 @@ export async function readPrototype(
       for (const id of missing)
         issue("warning", "SCENARIO_SCREEN_NOT_INSPECTED", id);
       issue("warning", "SCENARIO_COVERAGE_INCOMPLETE", scenario.startNodeId);
+    } else if (
+      edges.some(
+        (edge) => edge.type === "CONDITIONAL" || edge.navigation === "CHANGE_TO"
+      )
+    ) {
+      scenarioStatus = "requires_playback";
+      issue("warning", "SCENARIO_REQUIRES_RUNTIME_STATE", scenario.startNodeId);
     } else {
       scenarioStatus = "satisfied";
       const reachable = new Set([scenario.startNodeId]);
@@ -441,6 +515,7 @@ export async function readPrototype(
     scenarioStatus,
     pageId: page.id,
     pageFingerprint,
+    dependencies: dependencies.snapshots(),
     flowStartingPoints: page.flowStartingPoints,
     nodes,
     edges,
@@ -494,15 +569,25 @@ export async function prototypeTool(
     targetName:
       graph.nodes.find((node) => node.id === edge.sourceId)?.name ?? null,
     expected:
-      edge.type === "BACK"
-        ? "Previous screen is visible"
-        : edge.type === "CLOSE"
-          ? "Top overlay closes"
-          : edge.navigation === "OVERLAY"
-            ? "Destination overlay is visible"
-            : edge.navigation === "NAVIGATE"
-              ? "Destination screen is visible"
-              : "Unsupported action: inspect manually",
+      edge.type === "CONDITIONAL_BRANCH"
+        ? "Exercise this branch with documented variable inputs; observe its effects or no-op"
+        : edge.type === "CONDITIONAL"
+          ? "Evaluate conditional using documented starting variable values"
+          : edge.type === "SET_VARIABLE"
+            ? "Observe the assigned runtime variable through a bound layer or subsequent branch"
+            : edge.type === "SET_VARIABLE_MODE"
+              ? "Observe the selected variable mode in bound layers"
+              : edge.navigation === "CHANGE_TO"
+                ? "The target component variant is visible"
+                : edge.type === "BACK"
+                  ? "Previous screen is visible"
+                  : edge.type === "CLOSE"
+                    ? "Top overlay closes"
+                    : edge.navigation === "OVERLAY"
+                      ? "Destination overlay is visible"
+                      : edge.navigation === "NAVIGATE"
+                        ? "Destination screen is visible"
+                        : "Unsupported action: inspect manually",
     status: "not_run",
   }));
   const steps: typeof candidates = [];

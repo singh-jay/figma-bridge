@@ -9,6 +9,7 @@ import {
   replySchema,
   parse,
 } from "../protocol/index";
+import { PROTOTYPE_FEATURES } from "../protocol/prototype";
 const awaiting = new Set<string>();
 const status = document.querySelector<HTMLElement>("#status")!;
 const activity = document.querySelector<HTMLElement>("#activity")!;
@@ -50,6 +51,7 @@ function open() {
         documentName: name,
         capabilities: Object.keys(tools),
         operations: SUPPORTED_OPERATIONS,
+        prototypeFeatures: PROTOTYPE_FEATURES,
       })
     );
   };

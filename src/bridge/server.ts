@@ -31,6 +31,7 @@ import {
   fingerprint,
   type ToolName,
 } from "../protocol/index";
+import { reactionFeatures } from "../protocol/prototype";
 import { saveArtifact } from "./artifacts";
 import { privateDirectory } from "./state";
 import { secret } from "./state";
@@ -49,6 +50,7 @@ type Peer = {
   generation: string;
   capabilities: string[];
   operations: string[];
+  prototypeFeatures: string[];
   name: string;
   token: string;
   socket?: Socket;
@@ -162,6 +164,7 @@ export async function startBridge(options: {
           busy: p.busy ?? null,
           capabilities: p.capabilities,
           operations: p.operations,
+          prototypeFeatures: p.prototypeFeatures,
           accountAvailability: "unknown",
         })),
       };
@@ -175,6 +178,16 @@ export async function startBridge(options: {
       )
     )
       throw new BridgeError("UNSUPPORTED_PEER_OPERATION");
+    if (name === "apply") {
+      for (const op of args.operations)
+        if (
+          op.type === "upsert_reaction" &&
+          reactionFeatures(op.reaction).some(
+            (feature) => !peer.prototypeFeatures.includes(feature)
+          )
+        )
+          throw new BridgeError("UNSUPPORTED_PEER_PROTOTYPE_FEATURE");
+    }
     if (name === "write_scope") {
       if (args.action === "release") {
         if (peer.lease?.owner !== owner)
@@ -413,7 +426,7 @@ export async function startBridge(options: {
         name: `figma_bridge_${name}`,
         description: spec.description,
         inputSchema: toJsonSchema(spec.schema, {
-          ignoreActions: ["finite"],
+          ignoreActions: ["finite", "check"],
         }) as any,
         annotations: {
           readOnlyHint: spec.readOnly,
@@ -549,6 +562,7 @@ export async function startBridge(options: {
                 generation: crypto.randomUUID(),
                 capabilities: [...new Set(hello.capabilities)].sort(),
                 operations: [...new Set(hello.operations)].sort(),
+                prototypeFeatures: [...new Set(hello.prototypeFeatures)].sort(),
                 token: secret(),
                 name: hello.documentName,
                 lastSeen: Date.now(),
@@ -559,6 +573,8 @@ export async function startBridge(options: {
             if (
               fingerprint(peer.capabilities) !==
                 fingerprint([...new Set(hello.capabilities)].sort()) ||
+              fingerprint(peer.prototypeFeatures) !==
+                fingerprint([...new Set(hello.prototypeFeatures)].sort()) ||
               fingerprint(peer.operations) !==
                 fingerprint([...new Set(hello.operations)].sort())
             )

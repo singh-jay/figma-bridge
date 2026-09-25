@@ -65,6 +65,11 @@
                 "type": "integer",
                 "minimum": 0
               },
+              "actionPath": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
               "actionIndex": {
                 "type": "integer",
                 "minimum": 0

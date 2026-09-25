@@ -147,3 +147,23 @@ test("history-dependent scenarios can pass only with complete observed interacti
   input.checks = [];
   expect(evaluatePrototypeRun(input).status).toBe("inconclusive");
 });
+
+test("one conditional branch cannot stand in for another in playback coverage", () => {
+  const input = fixture();
+  input.prepared.steps = ["0/branch/0", "0/branch/1"].map((actionPath) => ({
+    sourceId: "button",
+    reactionIndex: 0,
+    actionIndex: 0,
+    actionPath,
+  }));
+  input.checks[0].id = "button/0/0/branch/0";
+  const incomplete = evaluatePrototypeRun(input);
+  expect(incomplete.status).toBe("inconclusive");
+  expect(incomplete.coverage.untested).toEqual(["button/0/0/branch/1"]);
+  input.checks.push({
+    ...input.checks[0],
+    id: "button/0/0/branch/1",
+    observed: "Else branch effect observed after reset with false input",
+  });
+  expect(evaluatePrototypeRun(input).status).toBe("passed");
+});

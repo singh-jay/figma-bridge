@@ -164,31 +164,212 @@ var id = v2.pipe(v2.string(), v2.minLength(1), v2.maxLength(200));
 var realId = v2.pipe(id, v2.regex(/^[^$]/, "Use confirmed node IDs"));
 var index = v2.pipe(v2.number(), v2.integer(), v2.minValue(0), v2.maxValue(999));
 var guarded = { nodeId: realId, expectedFingerprint: id };
+var seconds = v2.pipe(v2.number(), v2.minValue(0), v2.maxValue(10));
+var triggerSeconds = v2.pipe(
+  v2.number(),
+  v2.minValue(0),
+  v2.maxValue(60),
+  v2.description(
+    "Seconds in the native Plugin API; 1.5 is 1500ms in the Figma editor"
+  )
+);
 var transition = v2.nullable(
   v2.strictObject({
-    type: v2.literal("DISSOLVE"),
-    duration: v2.pipe(v2.number(), v2.finite(), v2.minValue(0), v2.maxValue(10)),
+    type: v2.picklist(["DISSOLVE", "SMART_ANIMATE"]),
+    duration: seconds,
     easing: v2.strictObject({
-      type: v2.picklist(["LINEAR", "EASE_IN", "EASE_OUT", "EASE_IN_AND_OUT"])
+      type: v2.picklist([
+        "LINEAR",
+        "EASE_IN",
+        "EASE_OUT",
+        "EASE_IN_AND_OUT",
+        "EASE_IN_BACK",
+        "EASE_OUT_BACK",
+        "EASE_IN_AND_OUT_BACK",
+        "GENTLE",
+        "QUICK",
+        "BOUNCY",
+        "SLOW"
+      ])
     })
   })
 );
-var prototypeActionSchema = v2.variant("type", [
-  v2.strictObject({ type: v2.literal("BACK") }),
-  v2.strictObject({ type: v2.literal("CLOSE") }),
+var triggerSchema = v2.variant("type", [
   v2.strictObject({
-    type: v2.literal("NODE"),
-    destinationId: realId,
-    navigation: v2.picklist(["NAVIGATE", "OVERLAY"]),
-    transition,
-    resetScrollPosition: v2.optional(v2.boolean(), true),
-    resetVideoPosition: v2.optional(v2.boolean(), false)
+    type: v2.picklist(["ON_CLICK", "ON_HOVER", "ON_PRESS", "ON_DRAG"])
+  }),
+  v2.strictObject({ type: v2.literal("AFTER_TIMEOUT"), timeout: triggerSeconds }),
+  v2.strictObject({
+    type: v2.picklist(["MOUSE_UP", "MOUSE_DOWN"]),
+    delay: triggerSeconds
+  }),
+  v2.strictObject({
+    type: v2.picklist(["MOUSE_ENTER", "MOUSE_LEAVE"]),
+    delay: triggerSeconds,
+    deprecatedVersion: v2.optional(v2.literal(false), false)
+  }),
+  v2.strictObject({
+    type: v2.literal("ON_KEY_DOWN"),
+    device: v2.literal("KEYBOARD"),
+    keyCodes: v2.pipe(
+      v2.array(v2.pipe(v2.number(), v2.integer(), v2.minValue(0), v2.maxValue(255))),
+      v2.minLength(1),
+      v2.maxLength(4),
+      v2.check((keys) => new Set(keys).size === keys.length, "Duplicate keys")
+    )
   })
 ]);
-var reactionSchema = v2.strictObject({
-  trigger: v2.strictObject({ type: v2.literal("ON_CLICK") }),
-  actions: v2.pipe(v2.array(prototypeActionSchema), v2.length(1))
-});
+var resolved = v2.picklist(["BOOLEAN", "FLOAT", "STRING", "COLOR"]);
+var channel = v2.pipe(v2.number(), v2.minValue(0), v2.maxValue(1));
+function valueSchema(depth) {
+  const literals = [
+    v2.strictObject({
+      type: v2.literal("BOOLEAN"),
+      resolvedType: v2.literal("BOOLEAN"),
+      value: v2.boolean()
+    }),
+    v2.strictObject({
+      type: v2.literal("FLOAT"),
+      resolvedType: v2.literal("FLOAT"),
+      value: v2.pipe(v2.number(), v2.minValue(-1e12), v2.maxValue(1e12))
+    }),
+    v2.strictObject({
+      type: v2.literal("STRING"),
+      resolvedType: v2.literal("STRING"),
+      value: v2.pipe(v2.string(), v2.maxLength(4096))
+    }),
+    v2.strictObject({
+      type: v2.literal("COLOR"),
+      resolvedType: v2.literal("COLOR"),
+      value: v2.strictObject({
+        r: channel,
+        g: channel,
+        b: channel,
+        a: v2.optional(channel)
+      })
+    }),
+    v2.strictObject({
+      type: v2.literal("VARIABLE_ALIAS"),
+      resolvedType: resolved,
+      value: v2.strictObject({ type: v2.literal("VARIABLE_ALIAS"), id: realId })
+    })
+  ];
+  if (!depth) return v2.union(literals);
+  return v2.union([
+    ...literals,
+    v2.strictObject({
+      type: v2.literal("EXPRESSION"),
+      resolvedType: resolved,
+      value: v2.strictObject({
+        expressionFunction: v2.picklist([
+          "ADDITION",
+          "SUBTRACTION",
+          "MULTIPLICATION",
+          "DIVISION",
+          "EQUALS",
+          "NOT_EQUAL",
+          "LESS_THAN",
+          "LESS_THAN_OR_EQUAL",
+          "GREATER_THAN",
+          "GREATER_THAN_OR_EQUAL",
+          "AND",
+          "OR",
+          "NEGATE",
+          "NOT"
+        ]),
+        expressionArguments: v2.pipe(
+          v2.array(valueSchema(depth - 1)),
+          v2.minLength(1),
+          v2.maxLength(2)
+        )
+      })
+    })
+  ]);
+}
+var prototypeValueSchema = valueSchema(4);
+function actionSchema(depth) {
+  const leaves = [
+    v2.strictObject({ type: v2.picklist(["BACK", "CLOSE"]) }),
+    v2.strictObject({
+      type: v2.literal("NODE"),
+      destinationId: realId,
+      navigation: v2.picklist(["NAVIGATE", "OVERLAY", "CHANGE_TO"]),
+      transition,
+      resetScrollPosition: v2.optional(v2.boolean(), true),
+      resetVideoPosition: v2.optional(v2.boolean(), false)
+    }),
+    v2.strictObject({
+      type: v2.literal("SET_VARIABLE"),
+      variableId: realId,
+      variableValue: prototypeValueSchema
+    }),
+    v2.strictObject({
+      type: v2.literal("SET_VARIABLE_MODE"),
+      variableCollectionId: realId,
+      variableModeId: realId
+    })
+  ];
+  if (!depth) return v2.union(leaves);
+  return v2.union([
+    ...leaves,
+    v2.strictObject({
+      type: v2.literal("CONDITIONAL"),
+      conditionalBlocks: v2.pipe(
+        v2.array(
+          v2.strictObject({
+            condition: v2.optional(prototypeValueSchema),
+            actions: v2.pipe(
+              v2.array(actionSchema(depth - 1)),
+              v2.minLength(1),
+              v2.maxLength(16)
+            )
+          })
+        ),
+        v2.minLength(1),
+        v2.maxLength(8),
+        v2.check(
+          (blocks) => blocks.every(
+            (block, i) => block.condition !== void 0 || i === blocks.length - 1
+          ),
+          "Else must be last"
+        )
+      )
+    })
+  ]);
+}
+var prototypeActionSchema = actionSchema(3);
+function actionCount(actions) {
+  return actions.reduce(
+    (count, action) => count + 1 + (action.type === "CONDITIONAL" ? action.conditionalBlocks.reduce(
+      (n, b) => n + actionCount(b.actions),
+      0
+    ) : 0),
+    0
+  );
+}
+var reactionSchema = v2.pipe(
+  v2.strictObject({
+    trigger: triggerSchema,
+    actions: v2.pipe(
+      v2.array(prototypeActionSchema),
+      v2.minLength(1),
+      v2.maxLength(16)
+    )
+  }),
+  v2.check(
+    (reaction) => actionCount(reaction.actions) <= 64,
+    "At most 64 actions per reaction"
+  )
+);
+var PROTOTYPE_FEATURES = [
+  "advanced_triggers",
+  "smart_animate",
+  "change_to",
+  "multiple_actions",
+  "variable_actions",
+  "expressions",
+  "conditionals"
+];
 var prototypeOperations = [
   v2.strictObject({
     type: v2.literal("upsert_reaction"),
@@ -257,28 +438,28 @@ var PROTOTYPE_OPERATIONS = prototypeOperations.map(
 );
 
 // src/protocol/index.ts
-var VERSION = 2;
-var PACKAGE_VERSION = "0.2.0";
+var VERSION = 3;
+var PACKAGE_VERSION = "0.3.0";
 var MAX_MESSAGE = 512 * 1024;
 var MAX_RESULT = 256 * 1024;
 var id2 = v3.pipe(v3.string(), v3.minLength(1), v3.maxLength(200));
-var finite3 = v3.pipe(v3.number(), v3.finite());
-var size = v3.pipe(finite3, v3.minValue(0), v3.maxValue(1e5));
+var finite2 = v3.pipe(v3.number(), v3.finite());
+var size = v3.pipe(finite2, v3.minValue(0), v3.maxValue(1e5));
 var text = v3.pipe(v3.string(), v3.maxLength(16384));
 var fontSchema = v3.strictObject({ family: id2, style: id2 });
 var color = v3.strictObject({
-  r: v3.pipe(finite3, v3.minValue(0), v3.maxValue(1)),
-  g: v3.pipe(finite3, v3.minValue(0), v3.maxValue(1)),
-  b: v3.pipe(finite3, v3.minValue(0), v3.maxValue(1))
+  r: v3.pipe(finite2, v3.minValue(0), v3.maxValue(1)),
+  g: v3.pipe(finite2, v3.minValue(0), v3.maxValue(1)),
+  b: v3.pipe(finite2, v3.minValue(0), v3.maxValue(1))
 });
 var patchSchema = v3.strictObject({
   name: v3.optional(v3.pipe(v3.string(), v3.maxLength(512))),
-  x: v3.optional(finite3),
-  y: v3.optional(finite3),
+  x: v3.optional(finite2),
+  y: v3.optional(finite2),
   width: v3.optional(size),
   height: v3.optional(size),
   visible: v3.optional(v3.boolean()),
-  opacity: v3.optional(v3.pipe(finite3, v3.minValue(0), v3.maxValue(1))),
+  opacity: v3.optional(v3.pipe(finite2, v3.minValue(0), v3.maxValue(1))),
   cornerRadius: v3.optional(size),
   clipsContent: v3.optional(v3.boolean()),
   layoutMode: v3.optional(v3.picklist(["NONE", "HORIZONTAL", "VERTICAL"])),
@@ -302,7 +483,7 @@ var patchSchema = v3.strictObject({
         v3.strictObject({
           type: v3.literal("SOLID"),
           color,
-          opacity: v3.optional(v3.pipe(finite3, v3.minValue(0), v3.maxValue(1)))
+          opacity: v3.optional(v3.pipe(finite2, v3.minValue(0), v3.maxValue(1)))
         })
       ),
       v3.maxLength(8)
@@ -526,7 +707,11 @@ var helloSchema = v3.strictObject({
     v3.array(v3.picklist(Object.keys(tools))),
     v3.maxLength(32)
   ),
-  operations: v3.pipe(v3.array(v3.string()), v3.maxLength(32))
+  operations: v3.pipe(v3.array(v3.string()), v3.maxLength(32)),
+  prototypeFeatures: v3.optional(
+    v3.pipe(v3.array(v3.picklist(PROTOTYPE_FEATURES)), v3.maxLength(16)),
+    []
+  )
 });
 
 // src/cli/adapter.ts

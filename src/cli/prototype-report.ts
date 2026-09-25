@@ -20,6 +20,7 @@ const identity = v.pipe(v.string(), v.minLength(1), v.maxLength(200));
 const stepSchema = v.looseObject({
   sourceId: identity,
   reactionIndex: v.pipe(v.number(), v.integer(), v.minValue(0)),
+  actionPath: v.optional(identity),
   actionIndex: v.pipe(v.number(), v.integer(), v.minValue(0)),
 });
 const preparedSchema = v.looseObject({
@@ -90,7 +91,7 @@ export const prototypeReportSchema = v.strictObject({
 });
 export type PrototypeReportInput = v.InferOutput<typeof prototypeReportSchema>;
 export const interactionCheckId = (step: v.InferOutput<typeof stepSchema>) =>
-  `${step.sourceId}/${step.reactionIndex}/${step.actionIndex}`;
+  `${step.sourceId}/${step.reactionIndex}/${step.actionPath ?? step.actionIndex}`;
 
 // Observations are supplied by the host controller. This validates evidence and
 // coverage, not the truth of a screenshot or a claim about the UI.

@@ -4,12 +4,13 @@ import * as v from "valibot";
 
 import {
   prototypeOperations,
+  PROTOTYPE_FEATURES,
   prototypeReadSchema,
   prototypePlaybackSchema,
 } from "./prototype";
 
-export const VERSION = 2;
-export const PACKAGE_VERSION = "0.2.0";
+export const VERSION = 3;
+export const PACKAGE_VERSION = "0.3.0";
 export const PORT = 3846;
 export const MAX_MESSAGE = 512 * 1024;
 export const MAX_RESULT = 256 * 1024;
@@ -297,6 +298,10 @@ export const helloSchema = v.strictObject({
     v.maxLength(32)
   ),
   operations: v.pipe(v.array(v.string()), v.maxLength(32)),
+  prototypeFeatures: v.optional(
+    v.pipe(v.array(v.picklist(PROTOTYPE_FEATURES)), v.maxLength(16)),
+    []
+  ),
 });
 export function canonical(value: unknown): string {
   if (value === undefined) return "null";
