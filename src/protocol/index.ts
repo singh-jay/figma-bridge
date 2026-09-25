@@ -2,7 +2,14 @@ import { hmac } from "@noble/hashes/hmac.js";
 import { sha256 } from "@noble/hashes/sha2.js";
 import * as v from "valibot";
 
-export const VERSION = 1;
+import {
+  prototypeOperations,
+  prototypeReadSchema,
+  prototypePlaybackSchema,
+} from "./prototype";
+
+export const VERSION = 2;
+export const PACKAGE_VERSION = "0.2.0";
 export const PORT = 3846;
 export const MAX_MESSAGE = 512 * 1024;
 export const MAX_RESULT = 256 * 1024;
@@ -57,6 +64,7 @@ export const patchSchema = v.strictObject({
 });
 const guarded = { nodeId: id, expectedFingerprint: id };
 export const operationSchema = v.variant("type", [
+  ...prototypeOperations,
   v.strictObject({
     type: v.literal("create"),
     key: v.pipe(v.string(), v.regex(/^[A-Za-z][A-Za-z0-9_-]{0,63}$/)),
@@ -107,7 +115,28 @@ export const operationSchema = v.variant("type", [
   }),
 ]);
 export type Operation = v.InferOutput<typeof operationSchema>;
+export const SUPPORTED_OPERATIONS = operationSchema.options.map(
+  (schema) => schema.entries.type.literal
+);
 export const tools = {
+  read_prototype: {
+    description:
+      "Read an explicit page and bounded node/flow graph, including reactions, starts, fingerprints and incomplete/unsupported paths.",
+    schema: prototypeReadSchema,
+    readOnly: true,
+  },
+  validate_prototype: {
+    description:
+      "Statically validate a scoped prototype graph. Valid structure is not proof of playback.",
+    schema: prototypeReadSchema,
+    readOnly: true,
+  },
+  prepare_prototype_playback: {
+    description:
+      "Prepare a prototype flow and candidate interaction checks for the agent browser/desktop controller. Does not open or play Figma; supplied URLs require document confirmation.",
+    schema: prototypePlaybackSchema,
+    readOnly: true,
+  },
   sessions: {
     description:
       "List connected local Figma plugin sessions. Always target an explicit session; file names and foreground tabs are not routing authority.",
@@ -231,6 +260,9 @@ export const commandSchema = v.strictObject({
   version: v.literal(VERSION),
   requestId: id,
   method: v.picklist([
+    "read_prototype",
+    "validate_prototype",
+    "prepare_prototype_playback",
     "selection",
     "read_nodes",
     "scope",
@@ -260,6 +292,11 @@ export const helloSchema = v.strictObject({
   token: v.pipe(v.string(), v.length(64)),
   nonce: id,
   documentName: v.pipe(v.string(), v.maxLength(512)),
+  capabilities: v.pipe(
+    v.array(v.picklist(Object.keys(tools) as [ToolName, ...ToolName[]])),
+    v.maxLength(32)
+  ),
+  operations: v.pipe(v.array(v.string()), v.maxLength(32)),
 });
 export function canonical(value: unknown): string {
   if (value === undefined) return "null";

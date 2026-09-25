@@ -156,81 +156,177 @@ function projectContext(project, target) {
 // src/protocol/index.ts
 import { hmac } from "@noble/hashes/hmac.js";
 import { sha256 } from "@noble/hashes/sha2.js";
+import * as v3 from "valibot";
+
+// src/protocol/prototype.ts
 import * as v2 from "valibot";
-var VERSION = 1;
-var MAX_MESSAGE = 512 * 1024;
-var MAX_RESULT = 256 * 1024;
 var id = v2.pipe(v2.string(), v2.minLength(1), v2.maxLength(200));
-var finite2 = v2.pipe(v2.number(), v2.finite());
-var size = v2.pipe(finite2, v2.minValue(0), v2.maxValue(1e5));
-var text = v2.pipe(v2.string(), v2.maxLength(16384));
-var fontSchema = v2.strictObject({ family: id, style: id });
-var color = v2.strictObject({
-  r: v2.pipe(finite2, v2.minValue(0), v2.maxValue(1)),
-  g: v2.pipe(finite2, v2.minValue(0), v2.maxValue(1)),
-  b: v2.pipe(finite2, v2.minValue(0), v2.maxValue(1))
+var realId = v2.pipe(id, v2.regex(/^[^$]/, "Use confirmed node IDs"));
+var index = v2.pipe(v2.number(), v2.integer(), v2.minValue(0), v2.maxValue(999));
+var guarded = { nodeId: realId, expectedFingerprint: id };
+var transition = v2.nullable(
+  v2.strictObject({
+    type: v2.literal("DISSOLVE"),
+    duration: v2.pipe(v2.number(), v2.finite(), v2.minValue(0), v2.maxValue(10)),
+    easing: v2.strictObject({
+      type: v2.picklist(["LINEAR", "EASE_IN", "EASE_OUT", "EASE_IN_AND_OUT"])
+    })
+  })
+);
+var prototypeActionSchema = v2.variant("type", [
+  v2.strictObject({ type: v2.literal("BACK") }),
+  v2.strictObject({ type: v2.literal("CLOSE") }),
+  v2.strictObject({
+    type: v2.literal("NODE"),
+    destinationId: realId,
+    navigation: v2.picklist(["NAVIGATE", "OVERLAY"]),
+    transition,
+    resetScrollPosition: v2.optional(v2.boolean(), true),
+    resetVideoPosition: v2.optional(v2.boolean(), false)
+  })
+]);
+var reactionSchema = v2.strictObject({
+  trigger: v2.strictObject({ type: v2.literal("ON_CLICK") }),
+  actions: v2.pipe(v2.array(prototypeActionSchema), v2.length(1))
 });
-var patchSchema = v2.strictObject({
-  name: v2.optional(v2.pipe(v2.string(), v2.maxLength(512))),
-  x: v2.optional(finite2),
-  y: v2.optional(finite2),
-  width: v2.optional(size),
-  height: v2.optional(size),
-  visible: v2.optional(v2.boolean()),
-  opacity: v2.optional(v2.pipe(finite2, v2.minValue(0), v2.maxValue(1))),
-  cornerRadius: v2.optional(size),
-  clipsContent: v2.optional(v2.boolean()),
-  layoutMode: v2.optional(v2.picklist(["NONE", "HORIZONTAL", "VERTICAL"])),
-  layoutSizingHorizontal: v2.optional(v2.picklist(["FIXED", "HUG", "FILL"])),
-  layoutSizingVertical: v2.optional(v2.picklist(["FIXED", "HUG", "FILL"])),
-  primaryAxisAlignItems: v2.optional(
-    v2.picklist(["MIN", "MAX", "CENTER", "SPACE_BETWEEN"])
+var prototypeOperations = [
+  v2.strictObject({
+    type: v2.literal("upsert_reaction"),
+    ...guarded,
+    index: v2.optional(index),
+    reaction: reactionSchema
+  }),
+  v2.strictObject({ type: v2.literal("remove_reaction"), ...guarded, index }),
+  v2.strictObject({
+    type: v2.literal("upsert_flow_start"),
+    ...guarded,
+    startNodeId: realId,
+    name: v2.pipe(v2.string(), v2.minLength(1), v2.maxLength(200))
+  }),
+  v2.strictObject({
+    type: v2.literal("remove_flow_start"),
+    ...guarded,
+    startNodeId: realId
+  }),
+  v2.strictObject({
+    type: v2.literal("update_prototype_settings"),
+    ...guarded,
+    patch: v2.strictObject({
+      overflowDirection: v2.picklist(["NONE", "HORIZONTAL", "VERTICAL", "BOTH"])
+    })
+  })
+];
+var prototypeOperationSchema = v2.variant("type", prototypeOperations);
+var prototypeReadEntries = {
+  sessionId: id,
+  pageId: realId,
+  nodeIds: v2.pipe(v2.array(realId), v2.minLength(1), v2.maxLength(24)),
+  traverseDestinations: v2.optional(v2.boolean(), false),
+  maxNodes: v2.optional(
+    v2.pipe(v2.number(), v2.integer(), v2.minValue(1), v2.maxValue(500)),
+    100
   ),
-  counterAxisAlignItems: v2.optional(
-    v2.picklist(["MIN", "MAX", "CENTER", "BASELINE"])
-  ),
-  paddingTop: v2.optional(size),
-  paddingBottom: v2.optional(size),
-  paddingLeft: v2.optional(size),
-  paddingRight: v2.optional(size),
-  itemSpacing: v2.optional(size),
-  fontSize: v2.optional(v2.pipe(size, v2.minValue(1))),
-  fills: v2.optional(
+  maxEdges: v2.optional(
+    v2.pipe(v2.number(), v2.integer(), v2.minValue(1), v2.maxValue(1e3)),
+    200
+  )
+};
+var prototypeReadSchema = v2.strictObject(prototypeReadEntries);
+var prototypePlaybackSchema = v2.strictObject({
+  ...prototypeReadEntries,
+  startNodeId: realId,
+  // A supplied URL is a routing hint, never proof of document identity.
+  prototypeUrl: v2.optional(
     v2.pipe(
-      v2.array(
-        v2.strictObject({
-          type: v2.literal("SOLID"),
-          color,
-          opacity: v2.optional(v2.pipe(finite2, v2.minValue(0), v2.maxValue(1)))
-        })
-      ),
-      v2.maxLength(8)
+      v2.string(),
+      v2.maxLength(2048),
+      v2.regex(
+        /^https:\/\/(?:www\.)?figma\.com\/proto\/[A-Za-z0-9]+(?:\/[^\s?#]*)?(?:\?[^\s#]*)?(?:#[^\s]*)?$/
+      )
     )
   )
 });
-var guarded = { nodeId: id, expectedFingerprint: id };
-var operationSchema = v2.variant("type", [
-  v2.strictObject({
-    type: v2.literal("create"),
-    key: v2.pipe(v2.string(), v2.regex(/^[A-Za-z][A-Za-z0-9_-]{0,63}$/)),
-    parentId: id,
-    expectedFingerprint: id,
-    kind: v2.picklist(["FRAME", "TEXT", "RECTANGLE", "INSTANCE"]),
-    componentId: v2.optional(id),
-    patch: v2.optional(patchSchema),
-    characters: v2.optional(text),
-    font: v2.optional(fontSchema)
+var PROTOTYPE_OPERATIONS = prototypeOperations.map(
+  (schema) => schema.entries.type.literal
+);
+
+// src/protocol/index.ts
+var VERSION = 2;
+var PACKAGE_VERSION = "0.2.0";
+var MAX_MESSAGE = 512 * 1024;
+var MAX_RESULT = 256 * 1024;
+var id2 = v3.pipe(v3.string(), v3.minLength(1), v3.maxLength(200));
+var finite3 = v3.pipe(v3.number(), v3.finite());
+var size = v3.pipe(finite3, v3.minValue(0), v3.maxValue(1e5));
+var text = v3.pipe(v3.string(), v3.maxLength(16384));
+var fontSchema = v3.strictObject({ family: id2, style: id2 });
+var color = v3.strictObject({
+  r: v3.pipe(finite3, v3.minValue(0), v3.maxValue(1)),
+  g: v3.pipe(finite3, v3.minValue(0), v3.maxValue(1)),
+  b: v3.pipe(finite3, v3.minValue(0), v3.maxValue(1))
+});
+var patchSchema = v3.strictObject({
+  name: v3.optional(v3.pipe(v3.string(), v3.maxLength(512))),
+  x: v3.optional(finite3),
+  y: v3.optional(finite3),
+  width: v3.optional(size),
+  height: v3.optional(size),
+  visible: v3.optional(v3.boolean()),
+  opacity: v3.optional(v3.pipe(finite3, v3.minValue(0), v3.maxValue(1))),
+  cornerRadius: v3.optional(size),
+  clipsContent: v3.optional(v3.boolean()),
+  layoutMode: v3.optional(v3.picklist(["NONE", "HORIZONTAL", "VERTICAL"])),
+  layoutSizingHorizontal: v3.optional(v3.picklist(["FIXED", "HUG", "FILL"])),
+  layoutSizingVertical: v3.optional(v3.picklist(["FIXED", "HUG", "FILL"])),
+  primaryAxisAlignItems: v3.optional(
+    v3.picklist(["MIN", "MAX", "CENTER", "SPACE_BETWEEN"])
+  ),
+  counterAxisAlignItems: v3.optional(
+    v3.picklist(["MIN", "MAX", "CENTER", "BASELINE"])
+  ),
+  paddingTop: v3.optional(size),
+  paddingBottom: v3.optional(size),
+  paddingLeft: v3.optional(size),
+  paddingRight: v3.optional(size),
+  itemSpacing: v3.optional(size),
+  fontSize: v3.optional(v3.pipe(size, v3.minValue(1))),
+  fills: v3.optional(
+    v3.pipe(
+      v3.array(
+        v3.strictObject({
+          type: v3.literal("SOLID"),
+          color,
+          opacity: v3.optional(v3.pipe(finite3, v3.minValue(0), v3.maxValue(1)))
+        })
+      ),
+      v3.maxLength(8)
+    )
+  )
+});
+var guarded2 = { nodeId: id2, expectedFingerprint: id2 };
+var operationSchema = v3.variant("type", [
+  ...prototypeOperations,
+  v3.strictObject({
+    type: v3.literal("create"),
+    key: v3.pipe(v3.string(), v3.regex(/^[A-Za-z][A-Za-z0-9_-]{0,63}$/)),
+    parentId: id2,
+    expectedFingerprint: id2,
+    kind: v3.picklist(["FRAME", "TEXT", "RECTANGLE", "INSTANCE"]),
+    componentId: v3.optional(id2),
+    patch: v3.optional(patchSchema),
+    characters: v3.optional(text),
+    font: v3.optional(fontSchema)
   }),
-  v2.strictObject({ type: v2.literal("update"), ...guarded, patch: patchSchema }),
-  v2.strictObject({
-    type: v2.literal("instance_properties"),
-    ...guarded,
-    properties: v2.record(id, v2.union([v2.string(), v2.boolean()]))
+  v3.strictObject({ type: v3.literal("update"), ...guarded2, patch: patchSchema }),
+  v3.strictObject({
+    type: v3.literal("instance_properties"),
+    ...guarded2,
+    properties: v3.record(id2, v3.union([v3.string(), v3.boolean()]))
   }),
-  v2.strictObject({
-    type: v2.literal("bind_variable"),
-    ...guarded,
-    field: v2.picklist([
+  v3.strictObject({
+    type: v3.literal("bind_variable"),
+    ...guarded2,
+    field: v3.picklist([
       "width",
       "height",
       "itemSpacing",
@@ -243,44 +339,62 @@ var operationSchema = v2.variant("type", [
       "fontSize",
       "fills"
     ]),
-    variableId: id
+    variableId: id2
   }),
-  v2.strictObject({
-    type: v2.literal("move"),
-    ...guarded,
-    parentId: id,
-    parentFingerprint: id,
-    index: v2.pipe(v2.number(), v2.integer(), v2.minValue(0), v2.maxValue(1e4))
+  v3.strictObject({
+    type: v3.literal("move"),
+    ...guarded2,
+    parentId: id2,
+    parentFingerprint: id2,
+    index: v3.pipe(v3.number(), v3.integer(), v3.minValue(0), v3.maxValue(1e4))
   }),
-  v2.strictObject({
-    type: v2.literal("set_text"),
-    ...guarded,
+  v3.strictObject({
+    type: v3.literal("set_text"),
+    ...guarded2,
     characters: text,
-    font: v2.optional(fontSchema)
+    font: v3.optional(fontSchema)
   })
 ]);
+var SUPPORTED_OPERATIONS = operationSchema.options.map(
+  (schema) => schema.entries.type.literal
+);
 var tools = {
+  read_prototype: {
+    description: "Read an explicit page and bounded node/flow graph, including reactions, starts, fingerprints and incomplete/unsupported paths.",
+    schema: prototypeReadSchema,
+    readOnly: true
+  },
+  validate_prototype: {
+    description: "Statically validate a scoped prototype graph. Valid structure is not proof of playback.",
+    schema: prototypeReadSchema,
+    readOnly: true
+  },
+  prepare_prototype_playback: {
+    description: "Prepare a prototype flow and candidate interaction checks for the agent browser/desktop controller. Does not open or play Figma; supplied URLs require document confirmation.",
+    schema: prototypePlaybackSchema,
+    readOnly: true
+  },
   sessions: {
     description: "List connected local Figma plugin sessions. Always target an explicit session; file names and foreground tabs are not routing authority.",
-    schema: v2.strictObject({}),
+    schema: v3.strictObject({}),
     readOnly: true
   },
   selection: {
     description: "Read the current page and selected node IDs in an explicit plugin session.",
-    schema: v2.strictObject({ sessionId: id }),
+    schema: v3.strictObject({ sessionId: id2 }),
     readOnly: true
   },
   read_nodes: {
     description: "Read bounded design data and mutation fingerprints for explicit nodes. Follow omitted child IDs with another scoped read. Never assume an incomplete response is a complete design.",
-    schema: v2.strictObject({
-      sessionId: id,
-      nodeIds: v2.pipe(v2.array(id), v2.minLength(1), v2.maxLength(24)),
-      depth: v2.optional(
-        v2.pipe(v2.number(), v2.integer(), v2.minValue(0), v2.maxValue(8)),
+    schema: v3.strictObject({
+      sessionId: id2,
+      nodeIds: v3.pipe(v3.array(id2), v3.minLength(1), v3.maxLength(24)),
+      depth: v3.optional(
+        v3.pipe(v3.number(), v3.integer(), v3.minValue(0), v3.maxValue(8)),
         2
       ),
-      maxNodes: v2.optional(
-        v2.pipe(v2.number(), v2.integer(), v2.minValue(1), v2.maxValue(500)),
+      maxNodes: v3.optional(
+        v3.pipe(v3.number(), v3.integer(), v3.minValue(1), v3.maxValue(500)),
         100
       )
     }),
@@ -288,89 +402,92 @@ var tools = {
   },
   read_text: {
     description: "Read a bounded text range and styled runs. Continue with nextOffset; expectedTextHash rejects a changed text snapshot.",
-    schema: v2.strictObject({
-      sessionId: id,
-      nodeId: id,
-      offset: v2.optional(v2.pipe(v2.number(), v2.integer(), v2.minValue(0)), 0),
-      length: v2.optional(
-        v2.pipe(v2.number(), v2.integer(), v2.minValue(1), v2.maxValue(8192)),
+    schema: v3.strictObject({
+      sessionId: id2,
+      nodeId: id2,
+      offset: v3.optional(v3.pipe(v3.number(), v3.integer(), v3.minValue(0)), 0),
+      length: v3.optional(
+        v3.pipe(v3.number(), v3.integer(), v3.minValue(1), v3.maxValue(8192)),
         4096
       ),
-      expectedTextHash: v2.optional(id)
+      expectedTextHash: v3.optional(id2)
     }),
     readOnly: true
   },
   read_resources: {
     description: "Resolve explicit local variable/collection/style/component IDs; aliases are preserved with bounded continuation IDs. Remote resources are unavailable.",
-    schema: v2.strictObject({
-      sessionId: id,
-      variableIds: v2.optional(v2.pipe(v2.array(id), v2.maxLength(50)), []),
-      styleIds: v2.optional(v2.pipe(v2.array(id), v2.maxLength(50)), []),
-      componentIds: v2.optional(v2.pipe(v2.array(id), v2.maxLength(20)), [])
+    schema: v3.strictObject({
+      sessionId: id2,
+      variableIds: v3.optional(v3.pipe(v3.array(id2), v3.maxLength(50)), []),
+      styleIds: v3.optional(v3.pipe(v3.array(id2), v3.maxLength(50)), []),
+      componentIds: v3.optional(v3.pipe(v3.array(id2), v3.maxLength(20)), [])
     }),
     readOnly: true
   },
   export: {
     description: "Export an explicit node as PNG/SVG, or original image bytes by imageHash. Saves a bounded artifact locally; no remote URLs.",
-    schema: v2.strictObject({
-      sessionId: id,
-      nodeId: id,
-      format: v2.picklist(["PNG", "SVG", "IMAGE"]),
-      imageHash: v2.optional(id),
-      scale: v2.optional(v2.pipe(v2.number(), v2.minValue(0.1), v2.maxValue(4)), 1)
+    schema: v3.strictObject({
+      sessionId: id2,
+      nodeId: id2,
+      format: v3.picklist(["PNG", "SVG", "IMAGE"]),
+      imageHash: v3.optional(id2),
+      scale: v3.optional(v3.pipe(v3.number(), v3.minValue(0.1), v3.maxValue(4)), 1)
     }),
     readOnly: true
   },
   design_context: {
     description: "Read a scoped design subtree. The project MCP adapter adds configured framework and source references for an optional target. Resolve resource IDs and export a preview separately.",
-    schema: v2.strictObject({
-      sessionId: id,
-      nodeId: id,
-      target: v2.optional(id)
+    schema: v3.strictObject({
+      sessionId: id2,
+      nodeId: id2,
+      target: v3.optional(id2)
     }),
     readOnly: true
   },
   write_scope: {
     description: "Acquire or release the sole writer lease for an explicit page/frame. Use the returned generation and leaseId for apply. A lease does not lock out human editors.",
-    schema: v2.strictObject({
-      sessionId: id,
-      rootId: id,
-      action: v2.picklist(["acquire", "release"])
+    schema: v3.strictObject({
+      sessionId: id2,
+      rootId: id2,
+      action: v3.picklist(["acquire", "release"])
     }),
     readOnly: false
   },
   apply: {
     description: "Preflight or apply supported operations inside a leased root. Use fresh fingerprints from read_nodes. Results can be partial or unknown; never blindly replay a lost write. Reuse operationId only with the identical payload.",
-    schema: v2.strictObject({
-      sessionId: id,
-      generation: id,
-      leaseId: id,
-      operationId: v2.pipe(v2.string(), v2.uuid()),
-      dryRun: v2.optional(v2.boolean(), false),
-      operations: v2.pipe(
-        v2.array(operationSchema),
-        v2.minLength(1),
-        v2.maxLength(50)
+    schema: v3.strictObject({
+      sessionId: id2,
+      generation: id2,
+      leaseId: id2,
+      operationId: v3.pipe(v3.string(), v3.uuid()),
+      dryRun: v3.optional(v3.boolean(), false),
+      operations: v3.pipe(
+        v3.array(operationSchema),
+        v3.minLength(1),
+        v3.maxLength(50)
       )
     }),
     readOnly: false
   },
   cancel_operation: {
     description: "Request cancellation at the next safe operation boundary. Inspect operation_status afterward; native calls may finish first.",
-    schema: v2.strictObject({ sessionId: id, operationId: id }),
+    schema: v3.strictObject({ sessionId: id2, operationId: id2 }),
     readOnly: false
   },
   operation_status: {
     description: "Read a write receipt without replaying the write. Unknown means inspect the canvas before any new operation.",
-    schema: v2.strictObject({ sessionId: id, operationId: id }),
+    schema: v3.strictObject({ sessionId: id2, operationId: id2 }),
     readOnly: true
   }
 };
-var commandSchema = v2.strictObject({
-  type: v2.literal("command"),
-  version: v2.literal(VERSION),
-  requestId: id,
-  method: v2.picklist([
+var commandSchema = v3.strictObject({
+  type: v3.literal("command"),
+  version: v3.literal(VERSION),
+  requestId: id2,
+  method: v3.picklist([
+    "read_prototype",
+    "validate_prototype",
+    "prepare_prototype_playback",
     "selection",
     "read_nodes",
     "scope",
@@ -383,27 +500,35 @@ var commandSchema = v2.strictObject({
     "cancel_operation",
     "read_text"
   ]),
-  params: v2.record(v2.string(), v2.unknown())
+  params: v3.record(v3.string(), v3.unknown())
 });
-var replySchema = v2.strictObject({
-  type: v2.literal("result"),
-  version: v2.literal(VERSION),
-  requestId: id,
-  ok: v2.boolean(),
-  result: v2.optional(v2.unknown()),
-  error: v2.optional(v2.string())
+var replySchema = v3.strictObject({
+  type: v3.literal("result"),
+  version: v3.literal(VERSION),
+  requestId: id2,
+  ok: v3.boolean(),
+  result: v3.optional(v3.unknown()),
+  error: v3.optional(v3.string())
 });
-var helloSchema = v2.strictObject({
-  type: v2.literal("hello"),
-  version: v2.literal(VERSION),
-  token: v2.pipe(v2.string(), v2.length(64)),
-  nonce: id,
-  documentName: v2.pipe(v2.string(), v2.maxLength(512))
+var helloSchema = v3.strictObject({
+  type: v3.literal("hello"),
+  version: v3.literal(VERSION),
+  token: v3.pipe(v3.string(), v3.length(64)),
+  nonce: id2,
+  documentName: v3.pipe(v3.string(), v3.maxLength(512)),
+  capabilities: v3.pipe(
+    v3.array(v3.picklist(Object.keys(tools))),
+    v3.maxLength(32)
+  ),
+  operations: v3.pipe(v3.array(v3.string()), v3.maxLength(32))
 });
 
 // src/cli/adapter.ts
 async function upstreamClient(stateDirectory, port) {
-  const client = new Client({ name: "figma-bridge-client", version: "0.1.0" });
+  const client = new Client({
+    name: "figma-bridge-client",
+    version: PACKAGE_VERSION
+  });
   await client.connect(
     new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${port}/mcp`), {
       requestInit: {
@@ -411,9 +536,11 @@ async function upstreamClient(stateDirectory, port) {
       }
     })
   );
-  if (client.getServerVersion()?.name !== "figma-bridge") {
+  if (client.getServerVersion()?.name !== "figma-bridge" || client.getServerVersion()?.version !== PACKAGE_VERSION) {
     await client.close();
-    throw new Error("INCOMPATIBLE_SERVICE: expected Figma Bridge");
+    throw new Error(
+      "INCOMPATIBLE_SERVICE: restart the service with the installed Figma Bridge version"
+    );
   }
   return client;
 }
@@ -455,7 +582,7 @@ async function callWithContext(client, project, name, args) {
 async function runMcp(project, stateDirectory, port) {
   const upstream = await upstreamClient(stateDirectory, port);
   const server = new Server(
-    { name: "figma-bridge", version: "0.1.0" },
+    { name: "figma-bridge", version: PACKAGE_VERSION },
     {
       capabilities: { tools: {} },
       instructions: `${upstream.getInstructions() ?? ""} Project context is scoped to this MCP adapter. Read design_context for the requested target; use its project's framework and conventions. Project configuration never selects a Figma session.`

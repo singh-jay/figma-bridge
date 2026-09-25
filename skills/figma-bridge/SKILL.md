@@ -1,6 +1,6 @@
 ---
 name: figma-bridge
-description: Read and edit connected Figma desktop designs through the Figma Bridge MCP server, then implement them using the current project's framework, components and design system. Use for requests to use Figma Bridge or its figma_bridge tools.
+description: Read and edit connected Figma desktop designs and prototype interactions through the Figma Bridge MCP server, then implement them using the current project's framework, components and design system. Use for requests to use Figma Bridge or its figma_bridge tools.
 ---
 
 # Figma Bridge
@@ -34,3 +34,7 @@ Use the returned generation and lease ID, a fresh operation UUID and at most 50 
 Inspect the receipt. Partial/unknown outcomes require `figma_bridge_operation_status` and current-state inspection before deciding the next edit. Never repeat confirmed steps or retry a lost creation under a fresh UUID. Use `figma_bridge_cancel_operation` to request cancellation and inspect its outcome; disconnecting the panel does not cancel work. Stop new writes while an outcome is unknown. Human edits or reconnection require fresh state and a fresh lease when invalidated. `dryRun` is a preflight, not a transaction guarantee.
 
 Read the edited nodes back, inspect a preview for visual changes, and release the lease. Report changed IDs and verification. Unsupported operations such as deletion, arbitrary evaluation and component-set authoring are not reasons to regenerate a document or use project-specific builders as an implicit fallback.
+
+## Prototype flows
+
+For prototype authoring, inspection or playback, read [references/prototypes.md](references/prototypes.md). Check the selected peer’s capabilities and operations first. Use the bridge for guarded authoring and readback, then the agent’s available browser/desktop controller for the real presentation UI. Static graph validation and exported images do not establish that a prototype played successfully. Keep framework-specific implementation in the consuming project.

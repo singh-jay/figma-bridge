@@ -19,6 +19,7 @@ import { toJsonSchema } from "@valibot/to-json-schema";
 import {
   BridgeError,
   VERSION,
+  PACKAGE_VERSION,
   PORT,
   MAX_MESSAGE,
   MAX_RESULT,
@@ -46,6 +47,8 @@ type Receipt = { hash: string; result: Record<string, unknown> };
 type Peer = {
   id: string;
   generation: string;
+  capabilities: string[];
+  operations: string[];
   name: string;
   token: string;
   socket?: Socket;
@@ -157,10 +160,21 @@ export async function startBridge(options: {
           documentName: p.name,
           connected: !!p.socket,
           busy: p.busy ?? null,
-          capabilities: Object.keys(tools),
+          capabilities: p.capabilities,
+          operations: p.operations,
+          accountAvailability: "unknown",
         })),
       };
     const peer = requirePeer(args.sessionId);
+    if (!peer.capabilities.includes(name))
+      throw new BridgeError("UNSUPPORTED_PEER_CAPABILITY");
+    if (
+      name === "apply" &&
+      args.operations.some(
+        (op: { type: string }) => !peer.operations.includes(op.type)
+      )
+    )
+      throw new BridgeError("UNSUPPORTED_PEER_OPERATION");
     if (name === "write_scope") {
       if (args.action === "release") {
         if (peer.lease?.owner !== owner)
@@ -379,7 +393,7 @@ export async function startBridge(options: {
   function makeMcp() {
     let owner = "";
     const server = new Server(
-      { name: "figma-bridge", version: "0.1.0" },
+      { name: "figma-bridge", version: PACKAGE_VERSION },
       {
         capabilities: { tools: {} },
         instructions:
@@ -513,6 +527,13 @@ export async function startBridge(options: {
             throw new BridgeError("TEXT_MESSAGES_REQUIRED");
           const data = JSON.parse(raw);
           if (!ws.data.peerId) {
+            if (data.version !== VERSION) {
+              ws.close(
+                1008,
+                "Protocol mismatch: update service, init --force, reopen plugin and pair."
+              );
+              return;
+            }
             const hello = parse(helloSchema, data);
             let peer = [...peers.values()].find((p) =>
               same(p.token, hello.token)
@@ -526,6 +547,8 @@ export async function startBridge(options: {
               peer = {
                 id: crypto.randomUUID(),
                 generation: crypto.randomUUID(),
+                capabilities: [...new Set(hello.capabilities)].sort(),
+                operations: [...new Set(hello.operations)].sort(),
                 token: secret(),
                 name: hello.documentName,
                 lastSeen: Date.now(),
@@ -533,6 +556,13 @@ export async function startBridge(options: {
               };
               peers.set(peer.id, peer);
             }
+            if (
+              fingerprint(peer.capabilities) !==
+                fingerprint([...new Set(hello.capabilities)].sort()) ||
+              fingerprint(peer.operations) !==
+                fingerprint([...new Set(hello.operations)].sort())
+            )
+              throw new BridgeError("CAPABILITIES_CHANGED_REPAIR");
             if (peer.socket) throw new BridgeError("ALREADY_CONNECTED");
             peer.socket = ws;
             peer.lastSeen = Date.now();

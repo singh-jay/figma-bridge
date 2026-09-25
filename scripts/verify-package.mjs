@@ -13,6 +13,8 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
+const { VERSION, tools, SUPPORTED_OPERATIONS } =
+  await import("../dist/protocol.js");
 const root = fileURLToPath(new URL("../", import.meta.url));
 const npm = process.platform === "win32" ? "npm.cmd" : "npm";
 const packed = JSON.parse(
@@ -24,6 +26,11 @@ const packed = JSON.parse(
 assert(packed.files.some((f) => f.path === "plugin/code.js"));
 assert(packed.files.some((f) => f.path === "schema/project.schema.json"));
 assert(packed.files.some((f) => f.path === "skills/figma-bridge/SKILL.md"));
+assert(
+  packed.files.some(
+    (f) => f.path === "skills/figma-bridge/references/prototypes.md"
+  )
+);
 assert(
   packed.files.every(
     (f) =>
@@ -154,10 +161,12 @@ try {
         ws.send(
           JSON.stringify({
             type: "hello",
-            version: 1,
+            version: VERSION,
             token: pairing.token,
             nonce: "fixture",
             documentName: file,
+            capabilities: Object.keys(tools),
+            operations: SUPPORTED_OPERATIONS,
           })
         )
       );
@@ -166,6 +175,21 @@ try {
         if (request.type === "ready") return resolvePeer(request);
         if (request.type === "ping") return ws.send('{"type":"pong"}');
         let result = { file };
+        if (
+          [
+            "read_prototype",
+            "validate_prototype",
+            "prepare_prototype_playback",
+          ].includes(request.method)
+        ) {
+          assert.equal(request.params.pageId, "page");
+          result = {
+            file,
+            complete: true,
+            playbackStatus: "not_run",
+            flowFingerprint: "controlled-graph",
+          };
+        }
         if (request.method === "read_nodes")
           result = { nodes: [{ id: "root", name: file }], complete: true };
         if (request.method === "apply") {
@@ -193,7 +217,7 @@ try {
         ws.send(
           JSON.stringify({
             type: "result",
-            version: 1,
+            version: VERSION,
             requestId: request.requestId,
             ok: true,
             result,
@@ -214,7 +238,10 @@ try {
       })
     );
     assert(client.getInstructions()?.includes("Project context"));
-    assert.equal((await client.listTools()).tools.length, 11);
+    assert.equal(
+      (await client.listTools()).tools.length,
+      Object.keys(tools).length
+    );
     return client;
   }
   const ca = await client(projectA),
@@ -248,6 +275,26 @@ try {
     contextB.repository.sources[0].path,
     join(projectB, "components")
   );
+  const sessions = await call(ca, "sessions", {});
+  assert(
+    sessions.sessions.every((peer) =>
+      peer.operations.includes("upsert_reaction")
+    )
+  );
+  for (const name of [
+    "read_prototype",
+    "validate_prototype",
+    "prepare_prototype_playback",
+  ]) {
+    const result = await call(cb, name, {
+      sessionId: b.sessionId,
+      pageId: "page",
+      nodeIds: ["root"],
+      ...(name === "prepare_prototype_playback" ? { startNodeId: "root" } : {}),
+    });
+    assert.equal(result.file, "B");
+    assert.equal(result.playbackStatus, "not_run");
+  }
   const lease = await call(ca, "write_scope", {
     sessionId: a.sessionId,
     rootId: "root",
@@ -317,8 +364,9 @@ try {
           "isolated npm install",
           "prebuilt plugin/custom port",
           "skill installation",
-          "11 stdio tools/instructions",
+          "14 stdio tools/instructions",
           "two projects/two controlled document peers",
+          "peer capabilities/prototype routing",
           "scoped leases",
           "idempotent writes",
           "receipt recovery",

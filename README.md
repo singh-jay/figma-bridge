@@ -201,6 +201,8 @@ Tools use the `figma_bridge_` prefix:
 | --- | --- |
 | `sessions`, `selection` | Select an explicit connected document and node IDs. |
 | `read_nodes`, `read_text` | Bounded design structure, layout, rich text and fingerprints. |
+| `read_prototype`, `validate_prototype` | Bounded interaction graph, flow starts, scrolling settings and static validation. |
+| `prepare_prototype_playback` | Prepare candidate checks for the agent’s browser/desktop controller; does not play the prototype itself. |
 | `read_resources` | Resolve local components, styles, variables and aliases. |
 | `export` | Export PNG, SVG or original image bytes to a local artifact. |
 | `design_context` | Scoped design plus the adapter's optional project target. |
@@ -212,6 +214,44 @@ Supported writes include frame/text/rectangle creation, local component instanti
 Keep the same MCP connection through lease acquisition, apply and release. Use fresh fingerprints and a new operation UUID for each new write. A result can be partial or unknown: inspect its receipt before deciding what remains to do. Never replay a lost creation under a new UUID. Reads and writes are not transactions; human collaborators can edit between calls. Closing the panel does not cancel a running operation. Cancellation takes effect at an operation boundary.
 
 Reads indicate truncation and continuation IDs. Writes allow at most 50 operations. Exports are capped at 10 MiB and 16 megapixels. Remote resources are reported unavailable. Native fonts/export operations can still fail after a preflight. There is no headless access to closed files or automatic code/design sync.
+
+## Prototype authoring and playback
+
+Version 0.2 adds click/tap interactions with one action: navigate, open overlay, back or close overlay. Navigation supports instant (`transition: null`) and dissolve transitions. The bridge can add/remove named flow starts and set `overflowDirection` to `NONE`, `HORIZONTAL`, `VERTICAL` or `BOTH`. It preserves other reactions and flow starts when changing an explicitly targeted entry.
+
+```text
+$figma-bridge Wire the selected screens into a prototype: Continue goes
+forward, Back returns to the previous screen, and Help opens an overlay
+with a Close button. Name the starting flow “Onboarding”. Read the
+interactions back, validate the flow, then use the real Figma player
+to test each path. Report authoring and playback results separately.
+```
+
+```text
+$figma-bridge Inspect the selected prototype flow, test its navigation
+in Figma’s player, and implement the observed behavior for the web target.
+Follow this project’s framework, components and styling conventions.
+```
+
+The agent uses the bridge to author and inspect the prototype, then its existing browser or desktop controller to operate Figma’s presentation UI. No second browser runtime is installed. Without that controller or an authenticated Figma player, authoring still works; playback must be reported as blocked or unverified. `prepare_prototype_playback` always returns `playbackStatus: "not_run"`; a valid graph is not a passed interaction test.
+
+Use explicit `sessionId`, `pageId`, starting node IDs and bounded traversal. Tools report incomplete or unsupported paths. Check the selected session’s advertised operations before writing; account availability remains unknown until an operation succeeds in the actual account. The [skill’s prototype reference](skills/figma-bridge/references/prototypes.md) includes the operation shapes, recovery rules and evidence format.
+
+Create screens first, then use their confirmed IDs to wire reactions. **Configure flow starts in a separate batch after reading fresh page state:** Figma can automatically create a flow start when the first interaction is added. A mixed batch may correctly stop with a partial receipt and `STALE_FINGERPRINT`. Inspect the receipt and resume only unexecuted work with fresh fingerprints.
+
+Basic navigation, back, overlays and dissolve were accepted in a Figma Free account during desktop verification. This does not unlock every Figma feature or remove Figma plan restrictions. Variable actions, expressions, conditionals, multiple actions, Smart Animate, advanced triggers and arbitrary overlay settings are outside the current write API. Existing unsupported reactions remain readable and are preserved when other entries are edited. Scrolling configuration is supported; a screen still needs overflowing content to visibly scroll.
+
+### Upgrade from 0.1
+
+Update the package dependency to a reviewed 0.2 commit from [the repository](https://github.com/singh-jay/figma-bridge), preserving your project profile. Then:
+
+1. Stop the old bridge service and close its Figma plugin.
+2. Run `npx --no-install figma-bridge init --project . --force` to refresh generated assets and MCP snippets. Use the same custom `--port` and `--state-dir`, if configured.
+3. Start the new service, reopen the development plugin and generate a fresh pairing token with `figma-bridge pair`.
+4. Refresh the installed skill with `npx --no-install figma-bridge install-skill --force`, and reconnect/restart the agent’s MCP connection.
+5. Check `sessions` for protocol 2 and the connected peer’s prototype operations.
+
+Package 0.2 uses protocol 2 and new mutation fingerprints. Old plugins are rejected with an upgrade message; do not reuse old leases or fingerprints. Project configuration stays at version 1. If the plugin menu contains multiple entries with the same name, check their manifest paths and run the one generated by the updated package.
 
 ## Diagnostics and local state
 

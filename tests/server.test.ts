@@ -8,6 +8,7 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 
 import { startBridge } from "../src/bridge/server";
 import { secret } from "../src/bridge/state";
+import { VERSION, tools, SUPPORTED_OPERATIONS } from "../src/protocol/index";
 const cleanup: Array<() => unknown> = [];
 afterEach(async () => {
   for (const fn of cleanup.reverse()) await fn();
@@ -39,7 +40,9 @@ async function setup(timeout = 1000) {
     return c;
   }
   async function peer(
-    handler?: (method: string, params: any) => Promise<unknown>
+    handler?: (method: string, params: any) => Promise<unknown>,
+    capabilities = Object.keys(tools),
+    operations: string[] = SUPPORTED_OPERATIONS
   ) {
     const pair = (await (
       await fetch(`${url}/pair`, { method: "POST", headers })
@@ -51,10 +54,12 @@ async function setup(timeout = 1000) {
         ws.send(
           JSON.stringify({
             type: "hello",
-            version: 1,
+            version: VERSION,
             token: pair.token,
             nonce: "test",
             documentName: "Fixture",
+            capabilities,
+            operations,
           })
         );
       ws.onerror = reject;
@@ -68,7 +73,7 @@ async function setup(timeout = 1000) {
           ws.send(
             JSON.stringify({
               type: "result",
-              version: 1,
+              version: VERSION,
               requestId: d.requestId,
               ok: true,
               result,
@@ -123,10 +128,12 @@ test("unpaired sockets cannot register a session", async () => {
       ws.send(
         JSON.stringify({
           type: "hello",
-          version: 1,
+          version: VERSION,
           token: "0".repeat(64),
           nonce: "x",
           documentName: "bad",
+          capabilities: Object.keys(tools),
+          operations: SUPPORTED_OPERATIONS,
         })
       );
     ws.onclose = () => resolve();
@@ -225,4 +232,64 @@ test("lost acknowledgements quarantine writes and recover receipts without repla
   expect((await call(c, "apply", { ...args, operations: [] })).error).toBe(
     "INVALID_ARGUMENTS"
   );
+});
+
+test("peer capabilities are advertised and enforced independently of the server tool list", async () => {
+  const s = await setup();
+  const peer = await s.peer(undefined, ["selection", "apply"], ["update"]);
+  const client = await s.client();
+  const sessions = await call(client, "sessions");
+  expect(sessions.sessions[0].capabilities).toEqual(["apply", "selection"]);
+  expect(sessions.sessions[0].operations).toEqual(["update"]);
+  expect(
+    (
+      await call(client, "read_prototype", {
+        sessionId: peer.sessionId,
+        pageId: "p",
+        nodeIds: ["n"],
+      })
+    ).error
+  ).toBe("UNSUPPORTED_PEER_CAPABILITY");
+  expect(
+    (
+      await call(client, "apply", {
+        sessionId: peer.sessionId,
+        generation: peer.generation,
+        leaseId: "l",
+        operationId: crypto.randomUUID(),
+        operations: [
+          {
+            type: "remove_reaction",
+            nodeId: "n",
+            expectedFingerprint: "f",
+            index: 0,
+          },
+        ],
+      })
+    ).error
+  ).toBe("UNSUPPORTED_PEER_OPERATION");
+});
+
+test("old plugins receive an actionable protocol mismatch and cannot register", async () => {
+  const s = await setup();
+  const pair = (await (
+    await fetch(`${s.url}/pair`, { method: "POST", headers: s.headers })
+  ).json()) as any;
+  const ws = new WebSocket(s.url.replace("http", "ws") + "/plugin");
+  const closed = await new Promise<CloseEvent>((resolve) => {
+    ws.onopen = () =>
+      ws.send(
+        JSON.stringify({
+          type: "hello",
+          version: 1,
+          token: pair.token,
+          nonce: "old",
+          documentName: "Old",
+        })
+      );
+    ws.onclose = resolve;
+  });
+  expect(closed.code).toBe(1008);
+  expect(closed.reason).toContain("init --force");
+  expect((await call(await s.client(), "sessions")).sessions).toHaveLength(0);
 });

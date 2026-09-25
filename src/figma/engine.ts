@@ -7,6 +7,13 @@ import {
   tools,
   type Operation,
 } from "../protocol/index";
+import {
+  prototypeState,
+  prototypeTool,
+  isPrototypeOperation,
+  checkPrototypeOperation,
+  writePrototypeOperation,
+} from "./prototype";
 import { readResources, Exports } from "./resources";
 import { serializeBridgeNode } from "./serialize";
 
@@ -84,6 +91,7 @@ export function snapshot(node: BaseNode) {
     type: node.type,
     parentId: node.parent?.id ?? null,
     properties,
+    prototypeFingerprint: fingerprint(prototypeState(node)),
     children,
   };
   return { ...state, fingerprint: fingerprint(state) };
@@ -146,6 +154,14 @@ export class BridgeEngine {
       this.cancelled.add(String(input.operationId));
       return { requested: true, operationId: input.operationId };
     }
+    if (
+      [
+        "read_prototype",
+        "validate_prototype",
+        "prepare_prototype_playback",
+      ].includes(method)
+    )
+      return prototypeTool(this.api, method, input, snapshot);
     if (method === "read_text") {
       const args = parse(tools.read_text.schema, input),
         node = await lookup(this.api, args.nodeId);
@@ -383,6 +399,13 @@ export class BridgeEngine {
         }
       }
       for (const op of args.operations) {
+        if (isPrototypeOperation(op))
+          await checkPrototypeOperation(
+            this.api,
+            await lookup(this.api, op.nodeId),
+            op,
+            root
+          );
         if (op.type === "move") {
           const node = await lookup(this.api, op.nodeId),
             parent = await lookup(this.api, op.parentId);
@@ -447,6 +470,11 @@ export class BridgeEngine {
           snapshot(node).fingerprint !== baselines.get(id)
         )
           throw new BridgeError("STALE_FINGERPRINT");
+        if (isPrototypeOperation(op)) {
+          await checkPrototypeOperation(this.api, node, op, root);
+          if (snapshot(node).fingerprint !== baselines.get(id))
+            throw new BridgeError("STALE_FINGERPRINT");
+        }
         let changed = node;
         started = true;
         if (op.type === "create") {
@@ -507,7 +535,9 @@ export class BridgeEngine {
           if (node.type !== "TEXT") throw new BridgeError("NOT_TEXT");
           if (op.font) node.fontName = op.font;
           node.characters = op.characters;
-        } else patchNode(node, op.patch);
+        } else if (isPrototypeOperation(op))
+          await writePrototypeOperation(node, op);
+        else patchNode(node, op.patch);
         result.steps.push({ index, nodeId: changed.id });
         baselines.set(id, snapshot(node).fingerprint);
       }

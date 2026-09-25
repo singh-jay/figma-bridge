@@ -1,6 +1,6 @@
 {
   "name": "@local/figma-bridge",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Framework-independent local Figma read/write bridge for coding agents",
   "license": "UNLICENSED",
