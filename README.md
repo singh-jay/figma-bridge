@@ -6,9 +6,27 @@ Requires Node.js 22+ and Figma desktop. This release is verified on macOS; Windo
 
 ## Install from GitHub
 
-The repository includes its built CLI, reusable modules, Figma plugin and schema, so Git dependencies work without lifecycle build scripts. Install a reviewed commit using `npm install --save-dev git+ssh://git@github.com/OWNER/figma-bridge.git#COMMIT` (or the equivalent Bun dependency). Replace `OWNER` and `COMMIT` with the repository owner and full commit SHA. Private repository access and Git SSH authentication are required. Then run `npx --no-install figma-bridge init --project .` and follow the setup below.
+Install from the public repository: [https://github.com/singh-jay/figma-bridge](https://github.com/singh-jay/figma-bridge). Git, Node.js 22+ and npm or Bun are required. The HTTPS URL does not require GitHub credentials or SSH setup.
 
-## Install a shared release
+From your project directory, install `main` with npm:
+
+```sh
+npm install --save-dev git+https://github.com/singh-jay/figma-bridge.git#main
+npx --no-install figma-bridge init --project .
+```
+
+Or use Bun:
+
+```sh
+bun add --dev git+https://github.com/singh-jay/figma-bridge.git#main
+bunx --no-install figma-bridge init --project .
+```
+
+The repository includes the built CLI, reusable modules, Figma plugin and schema. Commit your package manifest and lockfile to preserve the resolved version. To select a specific reviewed version, replace `#main` with its full commit SHA.
+
+Continue with **Connect to Figma** below.
+
+## Alternative: install a shared release
 
 Install the supplied tarball from your project directory:
 
@@ -17,7 +35,9 @@ npm install --save-dev /path/to/local-figma-bridge-0.1.0.tgz
 npx --no-install figma-bridge init --project .
 ```
 
-Add `.figma-bridge/` to `.gitignore`. Import the generated `.figma-bridge/plugin/manifest.json` in Figma desktop under Plugins → Development → Import plugin from manifest. Merge the generated `.figma-bridge/codex.toml` into your Codex MCP configuration, or use `.figma-bridge/mcp.json` with a compatible client. These snippets contain installation-specific paths but no credentials. Initialization does not modify your existing client configuration.
+## Connect to Figma
+
+`init` adds `.figma-bridge/` to an existing `.gitignore`, preserving its contents and avoiding duplicate entries. If your project has no `.gitignore`, create one and add `.figma-bridge/` as prompted. Import the generated `.figma-bridge/plugin/manifest.json` in Figma desktop under Plugins → Development → Import plugin from manifest. Merge the generated `.figma-bridge/codex.toml` into your Codex MCP configuration, or use `.figma-bridge/mcp.json` with a compatible client. These snippets contain installation-specific paths but no credentials. Initialization does not modify your existing client configuration.
 
 Run in one terminal:
 
@@ -119,4 +139,4 @@ Node builds the distribution; Bun is only needed to run the source unit tests. T
 
 This is one package with internal protocol, Figma, bridge, project and CLI modules. The reusable `./figma`, `./serialize` and `./protocol` exports allow an existing plugin to share the engine without forking it. Existing project-specific builders belong in the consuming project. The tarball includes compiled code, plugin assets, schema, skill and documentation, and excludes tests, credentials and designs.
 
-This package is marked private to prevent accidental registry publication. It is prepared for private sharing by its owner; a general open-source license and registry name have not been assigned. Bundled dependency notices are included in `THIRD_PARTY_NOTICES.md`.
+The GitHub repository is public. The package remains marked `private: true` to prevent accidental npm registry publication; it is installed directly from GitHub or a tarball. A general open-source license and registry name have not been assigned. Bundled dependency notices are included in `THIRD_PARTY_NOTICES.md`.

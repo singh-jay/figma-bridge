@@ -6,6 +6,8 @@ import {
   writeFileSync,
   cpSync,
   realpathSync,
+  lstatSync,
+  appendFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
 import { resolve, join } from "node:path";
@@ -153,8 +155,26 @@ try {
       join(local, "codex.toml"),
       `[mcp_servers.figma_bridge]\ncommand = ${JSON.stringify(process.execPath)}\nargs = ${JSON.stringify(args)}\nstartup_timeout_sec = 20\ntool_timeout_sec = 120\n`
     );
+    const ignorePath = join(project, ".gitignore");
+    let ignoreMessage = "Add .figma-bridge/ to your project's .gitignore.";
+    if (existsSync(ignorePath)) {
+      if (!lstatSync(ignorePath).isFile())
+        throw new Error("UNSAFE_GITIGNORE_FILE: expected a regular file");
+      const content = readFileSync(ignorePath, "utf8");
+      const alreadyListed = content
+        .split(/\r?\n/)
+        .some((line) => /^\/?\.figma-bridge\/?$/.test(line.trimEnd()));
+      if (!alreadyListed) {
+        const newline = content.includes("\r\n") ? "\r\n" : "\n";
+        const separator = content && !content.endsWith("\n") ? newline : "";
+        appendFileSync(ignorePath, `${separator}.figma-bridge/${newline}`);
+      }
+      ignoreMessage = alreadyListed
+        ? ".figma-bridge/ is already listed in .gitignore."
+        : "Added .figma-bridge/ to .gitignore.";
+    }
     console.log(
-      `Import ${join(plugin, "manifest.json")} in Figma desktop.\nMerge ${join(local, "mcp.json")} or ${join(local, "codex.toml")} into your MCP client configuration.\nAdd .figma-bridge/ to your project's .gitignore.\nEdit ${configPath} for your framework, component, token and guidance paths.\nThen run figma-bridge start and figma-bridge pair.`
+      `Import ${join(plugin, "manifest.json")} in Figma desktop.\nMerge ${join(local, "mcp.json")} or ${join(local, "codex.toml")} into your MCP client configuration.\n${ignoreMessage}\nEdit ${configPath} for your framework, component, token and guidance paths.\nThen run figma-bridge start and figma-bridge pair.`
     );
   } else if (action === "install-skill") {
     const root = resolve(
