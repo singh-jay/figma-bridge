@@ -13,6 +13,8 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
+const { VERSION, tools, SUPPORTED_OPERATIONS } =
+  await import("../dist/protocol.js");
 const root = fileURLToPath(new URL("../", import.meta.url));
 const npm = process.platform === "win32" ? "npm.cmd" : "npm";
 const packed = JSON.parse(
@@ -24,6 +26,11 @@ const packed = JSON.parse(
 assert(packed.files.some((f) => f.path === "plugin/code.js"));
 assert(packed.files.some((f) => f.path === "schema/project.schema.json"));
 assert(packed.files.some((f) => f.path === "skills/figma-bridge/SKILL.md"));
+assert(
+  packed.files.some(
+    (f) => f.path === "skills/figma-bridge/references/prototypes.md"
+  )
+);
 assert(
   packed.files.every(
     (f) =>
@@ -137,6 +144,109 @@ try {
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9ZlKAAAAAASUVORK5CYII=",
     "base64"
   );
+  // Exercise the installed CLI and on-disk bundles, including blocked conditions.
+  assert(
+    packed.files.some((f) => f.path === "schema/prototype-report.schema.json")
+  );
+  writeFileSync(join(projectA, "evidence.png"), image);
+  const reportInput = {
+    prepared: {
+      sessionId: "s",
+      generation: "g",
+      pageId: "p",
+      startNodeId: "a",
+      flowFingerprint: "fp",
+      structuralStatus: "valid",
+      complete: true,
+      stepsComplete: true,
+      steps: [{ sourceId: "button", reactionIndex: 0, actionIndex: 0 }],
+    },
+    after: { sessionId: "s", generation: "g", flowFingerprint: "fp" },
+    environment: {
+      controllerAvailable: true,
+      authenticated: true,
+      pluginConnected: true,
+      documentIdentity: "confirmed",
+      observedStartNodeId: "a",
+      viewport: { width: 1000, height: 800 },
+    },
+    checks: [
+      {
+        id: "button/0/0",
+        action: "Click",
+        expected: "B",
+        observed: "B",
+        status: "passed",
+        observedAt: new Date().toISOString(),
+        screenshots: ["evidence.png"],
+      },
+    ],
+  };
+  const cases = [
+    ["passed", (x) => x],
+    [
+      "blocked",
+      (x) => {
+        x.environment.controllerAvailable = false;
+      },
+    ],
+    [
+      "blocked",
+      (x) => {
+        x.environment.authenticated = false;
+      },
+    ],
+    [
+      "blocked",
+      (x) => {
+        x.environment.documentIdentity = "ambiguous";
+      },
+    ],
+    [
+      "blocked",
+      (x) => {
+        x.environment.documentIdentity = "mismatch";
+      },
+    ],
+    [
+      "blocked",
+      (x) => {
+        x.environment.pluginConnected = false;
+      },
+    ],
+    [
+      "inconclusive",
+      (x) => {
+        x.after.flowFingerprint = "changed";
+      },
+    ],
+    [
+      "inconclusive",
+      (x) => {
+        x.prepared.structuralStatus = "inconclusive";
+      },
+    ],
+  ];
+  for (const [status, mutate] of cases) {
+    const input = structuredClone(reportInput);
+    mutate(input);
+    const inputPath = join(work, "report-input.json");
+    writeFileSync(inputPath, JSON.stringify(input));
+    const saved = JSON.parse(
+      execFileSync(
+        process.execPath,
+        [cli, "prototype-report", "--project", projectA, "--input", inputPath],
+        { encoding: "utf8" }
+      )
+    );
+    assert.equal(saved.status, status);
+    const report = JSON.parse(readFileSync(saved.path, "utf8"));
+    assert.equal(report.status, status);
+    assert.deepEqual(
+      readFileSync(join(saved.path, "..", report.artifacts[0].path)),
+      image
+    );
+  }
   let creates = 0;
   async function peer(file) {
     const pairing = await (
@@ -154,10 +264,12 @@ try {
         ws.send(
           JSON.stringify({
             type: "hello",
-            version: 1,
+            version: VERSION,
             token: pairing.token,
             nonce: "fixture",
             documentName: file,
+            capabilities: Object.keys(tools),
+            operations: SUPPORTED_OPERATIONS,
           })
         )
       );
@@ -166,6 +278,21 @@ try {
         if (request.type === "ready") return resolvePeer(request);
         if (request.type === "ping") return ws.send('{"type":"pong"}');
         let result = { file };
+        if (
+          [
+            "read_prototype",
+            "validate_prototype",
+            "prepare_prototype_playback",
+          ].includes(request.method)
+        ) {
+          assert.equal(request.params.pageId, "page");
+          result = {
+            file,
+            complete: true,
+            playbackStatus: "not_run",
+            flowFingerprint: "controlled-graph",
+          };
+        }
         if (request.method === "read_nodes")
           result = { nodes: [{ id: "root", name: file }], complete: true };
         if (request.method === "apply") {
@@ -193,7 +320,7 @@ try {
         ws.send(
           JSON.stringify({
             type: "result",
-            version: 1,
+            version: VERSION,
             requestId: request.requestId,
             ok: true,
             result,
@@ -214,7 +341,10 @@ try {
       })
     );
     assert(client.getInstructions()?.includes("Project context"));
-    assert.equal((await client.listTools()).tools.length, 11);
+    assert.equal(
+      (await client.listTools()).tools.length,
+      Object.keys(tools).length
+    );
     return client;
   }
   const ca = await client(projectA),
@@ -248,6 +378,26 @@ try {
     contextB.repository.sources[0].path,
     join(projectB, "components")
   );
+  const sessions = await call(ca, "sessions", {});
+  assert(
+    sessions.sessions.every((peer) =>
+      peer.operations.includes("upsert_reaction")
+    )
+  );
+  for (const name of [
+    "read_prototype",
+    "validate_prototype",
+    "prepare_prototype_playback",
+  ]) {
+    const result = await call(cb, name, {
+      sessionId: b.sessionId,
+      pageId: "page",
+      nodeIds: ["root"],
+      ...(name === "prepare_prototype_playback" ? { startNodeId: "root" } : {}),
+    });
+    assert.equal(result.file, "B");
+    assert.equal(result.playbackStatus, "not_run");
+  }
   const lease = await call(ca, "write_scope", {
     sessionId: a.sessionId,
     rootId: "root",
@@ -317,8 +467,10 @@ try {
           "isolated npm install",
           "prebuilt plugin/custom port",
           "skill installation",
-          "11 stdio tools/instructions",
+          "14 stdio tools/instructions",
           "two projects/two controlled document peers",
+          "peer capabilities/prototype routing",
+          "playback evidence bundles/eight outcome cases",
           "scoped leases",
           "idempotent writes",
           "receipt recovery",

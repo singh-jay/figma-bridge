@@ -40,6 +40,7 @@ await build({
     "cli/index": "src/cli/index.ts",
     "bridge/server": "src/bridge/server.ts",
     "cli/adapter": "src/cli/adapter.ts",
+    "cli/prototype-report": "src/cli/prototype-report.ts",
     "project/config": "src/project/config.ts",
     protocol: "src/protocol/index.ts",
   },
@@ -77,4 +78,11 @@ writeFileSync(
 );
 console.log(
   "Built Node CLI, reusable modules, standalone Figma plugin and project schema."
+);
+
+const { prototypeReportSchema } =
+  await import("../dist/cli/prototype-report.js");
+writeFileSync(
+  "schema/prototype-report.schema.json",
+  JSON.stringify(toJsonSchema(prototypeReportSchema), null, 2) + "\n"
 );

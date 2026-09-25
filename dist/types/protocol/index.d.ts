@@ -1,5 +1,6 @@
 import * as v from "valibot";
-export declare const VERSION = 1;
+export declare const VERSION = 2;
+export declare const PACKAGE_VERSION = "0.2.0";
 export declare const PORT = 3846;
 export declare const MAX_MESSAGE: number;
 export declare const MAX_RESULT: number;
@@ -49,6 +50,74 @@ export declare const patchSchema: v.StrictObjectSchema<{
     }[], 8, undefined>]>, undefined>;
 }, undefined>;
 export declare const operationSchema: v.VariantSchema<"type", [v.StrictObjectSchema<{
+    readonly index: v.OptionalSchema<v.SchemaWithPipe<readonly [v.NumberSchema<undefined>, v.IntegerAction<number, undefined>, v.MinValueAction<number, 0, undefined>, v.MaxValueAction<number, 999, undefined>]>, undefined>;
+    readonly reaction: v.StrictObjectSchema<{
+        readonly trigger: v.StrictObjectSchema<{
+            readonly type: v.LiteralSchema<"ON_CLICK", undefined>;
+        }, undefined>;
+        readonly actions: v.SchemaWithPipe<readonly [v.ArraySchema<v.VariantSchema<"type", [v.StrictObjectSchema<{
+            readonly type: v.LiteralSchema<"BACK", undefined>;
+        }, undefined>, v.StrictObjectSchema<{
+            readonly type: v.LiteralSchema<"CLOSE", undefined>;
+        }, undefined>, v.StrictObjectSchema<{
+            readonly type: v.LiteralSchema<"NODE", undefined>;
+            readonly destinationId: v.SchemaWithPipe<readonly [v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>, v.RegexAction<string, "Use confirmed node IDs">]>;
+            readonly navigation: v.PicklistSchema<["NAVIGATE", "OVERLAY"], undefined>;
+            readonly transition: v.NullableSchema<v.StrictObjectSchema<{
+                readonly type: v.LiteralSchema<"DISSOLVE", undefined>;
+                readonly duration: v.SchemaWithPipe<readonly [v.NumberSchema<undefined>, v.FiniteAction<number, undefined>, v.MinValueAction<number, 0, undefined>, v.MaxValueAction<number, 10, undefined>]>;
+                readonly easing: v.StrictObjectSchema<{
+                    readonly type: v.PicklistSchema<["LINEAR", "EASE_IN", "EASE_OUT", "EASE_IN_AND_OUT"], undefined>;
+                }, undefined>;
+            }, undefined>, undefined>;
+            readonly resetScrollPosition: v.OptionalSchema<v.BooleanSchema<undefined>, true>;
+            readonly resetVideoPosition: v.OptionalSchema<v.BooleanSchema<undefined>, false>;
+        }, undefined>], undefined>, undefined>, v.LengthAction<({
+            type: "BACK";
+        } | {
+            type: "CLOSE";
+        } | {
+            type: "NODE";
+            destinationId: string;
+            navigation: "NAVIGATE" | "OVERLAY";
+            transition: {
+                type: "DISSOLVE";
+                duration: number;
+                easing: {
+                    type: "LINEAR" | "EASE_IN" | "EASE_OUT" | "EASE_IN_AND_OUT";
+                };
+            } | null;
+            resetScrollPosition: boolean;
+            resetVideoPosition: boolean;
+        })[], 1, undefined>]>;
+    }, undefined>;
+    readonly nodeId: v.SchemaWithPipe<readonly [v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>, v.RegexAction<string, "Use confirmed node IDs">]>;
+    readonly expectedFingerprint: v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>;
+    readonly type: v.LiteralSchema<"upsert_reaction", undefined>;
+}, undefined>, v.StrictObjectSchema<{
+    readonly index: v.SchemaWithPipe<readonly [v.NumberSchema<undefined>, v.IntegerAction<number, undefined>, v.MinValueAction<number, 0, undefined>, v.MaxValueAction<number, 999, undefined>]>;
+    readonly nodeId: v.SchemaWithPipe<readonly [v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>, v.RegexAction<string, "Use confirmed node IDs">]>;
+    readonly expectedFingerprint: v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>;
+    readonly type: v.LiteralSchema<"remove_reaction", undefined>;
+}, undefined>, v.StrictObjectSchema<{
+    readonly startNodeId: v.SchemaWithPipe<readonly [v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>, v.RegexAction<string, "Use confirmed node IDs">]>;
+    readonly name: v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>;
+    readonly nodeId: v.SchemaWithPipe<readonly [v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>, v.RegexAction<string, "Use confirmed node IDs">]>;
+    readonly expectedFingerprint: v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>;
+    readonly type: v.LiteralSchema<"upsert_flow_start", undefined>;
+}, undefined>, v.StrictObjectSchema<{
+    readonly startNodeId: v.SchemaWithPipe<readonly [v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>, v.RegexAction<string, "Use confirmed node IDs">]>;
+    readonly nodeId: v.SchemaWithPipe<readonly [v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>, v.RegexAction<string, "Use confirmed node IDs">]>;
+    readonly expectedFingerprint: v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>;
+    readonly type: v.LiteralSchema<"remove_flow_start", undefined>;
+}, undefined>, v.StrictObjectSchema<{
+    readonly patch: v.StrictObjectSchema<{
+        readonly overflowDirection: v.PicklistSchema<["NONE", "HORIZONTAL", "VERTICAL", "BOTH"], undefined>;
+    }, undefined>;
+    readonly nodeId: v.SchemaWithPipe<readonly [v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>, v.RegexAction<string, "Use confirmed node IDs">]>;
+    readonly expectedFingerprint: v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>;
+    readonly type: v.LiteralSchema<"update_prototype_settings", undefined>;
+}, undefined>, v.StrictObjectSchema<{
     readonly type: v.LiteralSchema<"create", undefined>;
     readonly key: v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.RegexAction<string, undefined>]>;
     readonly parentId: v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>;
@@ -171,7 +240,61 @@ export declare const operationSchema: v.VariantSchema<"type", [v.StrictObjectSch
     readonly type: v.LiteralSchema<"set_text", undefined>;
 }, undefined>], undefined>;
 export type Operation = v.InferOutput<typeof operationSchema>;
+export declare const SUPPORTED_OPERATIONS: ("upsert_reaction" | "remove_reaction" | "upsert_flow_start" | "remove_flow_start" | "update_prototype_settings" | "create" | "update" | "instance_properties" | "bind_variable" | "move" | "set_text")[];
 export declare const tools: {
+    readonly read_prototype: {
+        readonly description: "Read an explicit page and bounded node/flow graph, including reactions, starts, fingerprints and incomplete/unsupported paths.";
+        readonly schema: v.StrictObjectSchema<{
+            scenario: v.OptionalSchema<v.StrictObjectSchema<{
+                readonly startNodeId: v.SchemaWithPipe<readonly [v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>, v.RegexAction<string, "Use confirmed node IDs">]>;
+                readonly expectedScreenIds: v.OptionalSchema<v.SchemaWithPipe<readonly [v.ArraySchema<v.SchemaWithPipe<readonly [v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>, v.RegexAction<string, "Use confirmed node IDs">]>, undefined>, v.MaxLengthAction<string[], 100, undefined>]>, readonly []>;
+                readonly requireExitNodeIds: v.OptionalSchema<v.SchemaWithPipe<readonly [v.ArraySchema<v.SchemaWithPipe<readonly [v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>, v.RegexAction<string, "Use confirmed node IDs">]>, undefined>, v.MaxLengthAction<string[], 100, undefined>]>, readonly []>;
+            }, undefined>, undefined>;
+            sessionId: v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>;
+            pageId: v.SchemaWithPipe<readonly [v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>, v.RegexAction<string, "Use confirmed node IDs">]>;
+            nodeIds: v.SchemaWithPipe<readonly [v.ArraySchema<v.SchemaWithPipe<readonly [v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>, v.RegexAction<string, "Use confirmed node IDs">]>, undefined>, v.MinLengthAction<string[], 1, undefined>, v.MaxLengthAction<string[], 24, undefined>]>;
+            traverseDestinations: v.OptionalSchema<v.BooleanSchema<undefined>, false>;
+            maxNodes: v.OptionalSchema<v.SchemaWithPipe<readonly [v.NumberSchema<undefined>, v.IntegerAction<number, undefined>, v.MinValueAction<number, 1, undefined>, v.MaxValueAction<number, 500, undefined>]>, 100>;
+            maxEdges: v.OptionalSchema<v.SchemaWithPipe<readonly [v.NumberSchema<undefined>, v.IntegerAction<number, undefined>, v.MinValueAction<number, 1, undefined>, v.MaxValueAction<number, 1000, undefined>]>, 200>;
+        }, undefined>;
+        readonly readOnly: true;
+    };
+    readonly validate_prototype: {
+        readonly description: "Statically validate a scoped prototype graph. Valid structure is not proof of playback.";
+        readonly schema: v.StrictObjectSchema<{
+            scenario: v.OptionalSchema<v.StrictObjectSchema<{
+                readonly startNodeId: v.SchemaWithPipe<readonly [v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>, v.RegexAction<string, "Use confirmed node IDs">]>;
+                readonly expectedScreenIds: v.OptionalSchema<v.SchemaWithPipe<readonly [v.ArraySchema<v.SchemaWithPipe<readonly [v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>, v.RegexAction<string, "Use confirmed node IDs">]>, undefined>, v.MaxLengthAction<string[], 100, undefined>]>, readonly []>;
+                readonly requireExitNodeIds: v.OptionalSchema<v.SchemaWithPipe<readonly [v.ArraySchema<v.SchemaWithPipe<readonly [v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>, v.RegexAction<string, "Use confirmed node IDs">]>, undefined>, v.MaxLengthAction<string[], 100, undefined>]>, readonly []>;
+            }, undefined>, undefined>;
+            sessionId: v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>;
+            pageId: v.SchemaWithPipe<readonly [v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>, v.RegexAction<string, "Use confirmed node IDs">]>;
+            nodeIds: v.SchemaWithPipe<readonly [v.ArraySchema<v.SchemaWithPipe<readonly [v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>, v.RegexAction<string, "Use confirmed node IDs">]>, undefined>, v.MinLengthAction<string[], 1, undefined>, v.MaxLengthAction<string[], 24, undefined>]>;
+            traverseDestinations: v.OptionalSchema<v.BooleanSchema<undefined>, false>;
+            maxNodes: v.OptionalSchema<v.SchemaWithPipe<readonly [v.NumberSchema<undefined>, v.IntegerAction<number, undefined>, v.MinValueAction<number, 1, undefined>, v.MaxValueAction<number, 500, undefined>]>, 100>;
+            maxEdges: v.OptionalSchema<v.SchemaWithPipe<readonly [v.NumberSchema<undefined>, v.IntegerAction<number, undefined>, v.MinValueAction<number, 1, undefined>, v.MaxValueAction<number, 1000, undefined>]>, 200>;
+        }, undefined>;
+        readonly readOnly: true;
+    };
+    readonly prepare_prototype_playback: {
+        readonly description: "Prepare a prototype flow and candidate interaction checks for the agent browser/desktop controller. Does not open or play Figma; supplied URLs require document confirmation.";
+        readonly schema: v.StrictObjectSchema<{
+            readonly startNodeId: v.SchemaWithPipe<readonly [v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>, v.RegexAction<string, "Use confirmed node IDs">]>;
+            readonly prototypeUrl: v.OptionalSchema<v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MaxLengthAction<string, 2048, undefined>, v.RegexAction<string, undefined>]>, undefined>;
+            readonly scenario: v.OptionalSchema<v.StrictObjectSchema<{
+                readonly startNodeId: v.SchemaWithPipe<readonly [v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>, v.RegexAction<string, "Use confirmed node IDs">]>;
+                readonly expectedScreenIds: v.OptionalSchema<v.SchemaWithPipe<readonly [v.ArraySchema<v.SchemaWithPipe<readonly [v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>, v.RegexAction<string, "Use confirmed node IDs">]>, undefined>, v.MaxLengthAction<string[], 100, undefined>]>, readonly []>;
+                readonly requireExitNodeIds: v.OptionalSchema<v.SchemaWithPipe<readonly [v.ArraySchema<v.SchemaWithPipe<readonly [v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>, v.RegexAction<string, "Use confirmed node IDs">]>, undefined>, v.MaxLengthAction<string[], 100, undefined>]>, readonly []>;
+            }, undefined>, undefined>;
+            readonly sessionId: v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>;
+            readonly pageId: v.SchemaWithPipe<readonly [v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>, v.RegexAction<string, "Use confirmed node IDs">]>;
+            readonly nodeIds: v.SchemaWithPipe<readonly [v.ArraySchema<v.SchemaWithPipe<readonly [v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>, v.RegexAction<string, "Use confirmed node IDs">]>, undefined>, v.MinLengthAction<string[], 1, undefined>, v.MaxLengthAction<string[], 24, undefined>]>;
+            readonly traverseDestinations: v.OptionalSchema<v.BooleanSchema<undefined>, false>;
+            readonly maxNodes: v.OptionalSchema<v.SchemaWithPipe<readonly [v.NumberSchema<undefined>, v.IntegerAction<number, undefined>, v.MinValueAction<number, 1, undefined>, v.MaxValueAction<number, 500, undefined>]>, 100>;
+            readonly maxEdges: v.OptionalSchema<v.SchemaWithPipe<readonly [v.NumberSchema<undefined>, v.IntegerAction<number, undefined>, v.MinValueAction<number, 1, undefined>, v.MaxValueAction<number, 1000, undefined>]>, 200>;
+        }, undefined>;
+        readonly readOnly: true;
+    };
     readonly sessions: {
         readonly description: "List connected local Figma plugin sessions. Always target an explicit session; file names and foreground tabs are not routing authority.";
         readonly schema: v.StrictObjectSchema<{}, undefined>;
@@ -253,6 +376,74 @@ export declare const tools: {
             readonly operationId: v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.UuidAction<string, undefined>]>;
             readonly dryRun: v.OptionalSchema<v.BooleanSchema<undefined>, false>;
             readonly operations: v.SchemaWithPipe<readonly [v.ArraySchema<v.VariantSchema<"type", [v.StrictObjectSchema<{
+                readonly index: v.OptionalSchema<v.SchemaWithPipe<readonly [v.NumberSchema<undefined>, v.IntegerAction<number, undefined>, v.MinValueAction<number, 0, undefined>, v.MaxValueAction<number, 999, undefined>]>, undefined>;
+                readonly reaction: v.StrictObjectSchema<{
+                    readonly trigger: v.StrictObjectSchema<{
+                        readonly type: v.LiteralSchema<"ON_CLICK", undefined>;
+                    }, undefined>;
+                    readonly actions: v.SchemaWithPipe<readonly [v.ArraySchema<v.VariantSchema<"type", [v.StrictObjectSchema<{
+                        readonly type: v.LiteralSchema<"BACK", undefined>;
+                    }, undefined>, v.StrictObjectSchema<{
+                        readonly type: v.LiteralSchema<"CLOSE", undefined>;
+                    }, undefined>, v.StrictObjectSchema<{
+                        readonly type: v.LiteralSchema<"NODE", undefined>;
+                        readonly destinationId: v.SchemaWithPipe<readonly [v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>, v.RegexAction<string, "Use confirmed node IDs">]>;
+                        readonly navigation: v.PicklistSchema<["NAVIGATE", "OVERLAY"], undefined>;
+                        readonly transition: v.NullableSchema<v.StrictObjectSchema<{
+                            readonly type: v.LiteralSchema<"DISSOLVE", undefined>;
+                            readonly duration: v.SchemaWithPipe<readonly [v.NumberSchema<undefined>, v.FiniteAction<number, undefined>, v.MinValueAction<number, 0, undefined>, v.MaxValueAction<number, 10, undefined>]>;
+                            readonly easing: v.StrictObjectSchema<{
+                                readonly type: v.PicklistSchema<["LINEAR", "EASE_IN", "EASE_OUT", "EASE_IN_AND_OUT"], undefined>;
+                            }, undefined>;
+                        }, undefined>, undefined>;
+                        readonly resetScrollPosition: v.OptionalSchema<v.BooleanSchema<undefined>, true>;
+                        readonly resetVideoPosition: v.OptionalSchema<v.BooleanSchema<undefined>, false>;
+                    }, undefined>], undefined>, undefined>, v.LengthAction<({
+                        type: "BACK";
+                    } | {
+                        type: "CLOSE";
+                    } | {
+                        type: "NODE";
+                        destinationId: string;
+                        navigation: "NAVIGATE" | "OVERLAY";
+                        transition: {
+                            type: "DISSOLVE";
+                            duration: number;
+                            easing: {
+                                type: "LINEAR" | "EASE_IN" | "EASE_OUT" | "EASE_IN_AND_OUT";
+                            };
+                        } | null;
+                        resetScrollPosition: boolean;
+                        resetVideoPosition: boolean;
+                    })[], 1, undefined>]>;
+                }, undefined>;
+                readonly nodeId: v.SchemaWithPipe<readonly [v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>, v.RegexAction<string, "Use confirmed node IDs">]>;
+                readonly expectedFingerprint: v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>;
+                readonly type: v.LiteralSchema<"upsert_reaction", undefined>;
+            }, undefined>, v.StrictObjectSchema<{
+                readonly index: v.SchemaWithPipe<readonly [v.NumberSchema<undefined>, v.IntegerAction<number, undefined>, v.MinValueAction<number, 0, undefined>, v.MaxValueAction<number, 999, undefined>]>;
+                readonly nodeId: v.SchemaWithPipe<readonly [v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>, v.RegexAction<string, "Use confirmed node IDs">]>;
+                readonly expectedFingerprint: v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>;
+                readonly type: v.LiteralSchema<"remove_reaction", undefined>;
+            }, undefined>, v.StrictObjectSchema<{
+                readonly startNodeId: v.SchemaWithPipe<readonly [v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>, v.RegexAction<string, "Use confirmed node IDs">]>;
+                readonly name: v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>;
+                readonly nodeId: v.SchemaWithPipe<readonly [v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>, v.RegexAction<string, "Use confirmed node IDs">]>;
+                readonly expectedFingerprint: v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>;
+                readonly type: v.LiteralSchema<"upsert_flow_start", undefined>;
+            }, undefined>, v.StrictObjectSchema<{
+                readonly startNodeId: v.SchemaWithPipe<readonly [v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>, v.RegexAction<string, "Use confirmed node IDs">]>;
+                readonly nodeId: v.SchemaWithPipe<readonly [v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>, v.RegexAction<string, "Use confirmed node IDs">]>;
+                readonly expectedFingerprint: v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>;
+                readonly type: v.LiteralSchema<"remove_flow_start", undefined>;
+            }, undefined>, v.StrictObjectSchema<{
+                readonly patch: v.StrictObjectSchema<{
+                    readonly overflowDirection: v.PicklistSchema<["NONE", "HORIZONTAL", "VERTICAL", "BOTH"], undefined>;
+                }, undefined>;
+                readonly nodeId: v.SchemaWithPipe<readonly [v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>, v.RegexAction<string, "Use confirmed node IDs">]>;
+                readonly expectedFingerprint: v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>;
+                readonly type: v.LiteralSchema<"update_prototype_settings", undefined>;
+            }, undefined>, v.StrictObjectSchema<{
                 readonly type: v.LiteralSchema<"create", undefined>;
                 readonly key: v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.RegexAction<string, undefined>]>;
                 readonly parentId: v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>;
@@ -374,6 +565,57 @@ export declare const tools: {
                 readonly expectedFingerprint: v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>;
                 readonly type: v.LiteralSchema<"set_text", undefined>;
             }, undefined>], undefined>, undefined>, v.MinLengthAction<({
+                index?: number | undefined;
+                reaction: {
+                    trigger: {
+                        type: "ON_CLICK";
+                    };
+                    actions: ({
+                        type: "BACK";
+                    } | {
+                        type: "CLOSE";
+                    } | {
+                        type: "NODE";
+                        destinationId: string;
+                        navigation: "NAVIGATE" | "OVERLAY";
+                        transition: {
+                            type: "DISSOLVE";
+                            duration: number;
+                            easing: {
+                                type: "LINEAR" | "EASE_IN" | "EASE_OUT" | "EASE_IN_AND_OUT";
+                            };
+                        } | null;
+                        resetScrollPosition: boolean;
+                        resetVideoPosition: boolean;
+                    })[];
+                };
+                nodeId: string;
+                expectedFingerprint: string;
+                type: "upsert_reaction";
+            } | {
+                index: number;
+                nodeId: string;
+                expectedFingerprint: string;
+                type: "remove_reaction";
+            } | {
+                startNodeId: string;
+                name: string;
+                nodeId: string;
+                expectedFingerprint: string;
+                type: "upsert_flow_start";
+            } | {
+                startNodeId: string;
+                nodeId: string;
+                expectedFingerprint: string;
+                type: "remove_flow_start";
+            } | {
+                patch: {
+                    overflowDirection: "NONE" | "HORIZONTAL" | "VERTICAL" | "BOTH";
+                };
+                nodeId: string;
+                expectedFingerprint: string;
+                type: "update_prototype_settings";
+            } | {
                 type: "create";
                 key: string;
                 parentId: string;
@@ -481,6 +723,57 @@ export declare const tools: {
                 expectedFingerprint: string;
                 type: "set_text";
             })[], 1, undefined>, v.MaxLengthAction<({
+                index?: number | undefined;
+                reaction: {
+                    trigger: {
+                        type: "ON_CLICK";
+                    };
+                    actions: ({
+                        type: "BACK";
+                    } | {
+                        type: "CLOSE";
+                    } | {
+                        type: "NODE";
+                        destinationId: string;
+                        navigation: "NAVIGATE" | "OVERLAY";
+                        transition: {
+                            type: "DISSOLVE";
+                            duration: number;
+                            easing: {
+                                type: "LINEAR" | "EASE_IN" | "EASE_OUT" | "EASE_IN_AND_OUT";
+                            };
+                        } | null;
+                        resetScrollPosition: boolean;
+                        resetVideoPosition: boolean;
+                    })[];
+                };
+                nodeId: string;
+                expectedFingerprint: string;
+                type: "upsert_reaction";
+            } | {
+                index: number;
+                nodeId: string;
+                expectedFingerprint: string;
+                type: "remove_reaction";
+            } | {
+                startNodeId: string;
+                name: string;
+                nodeId: string;
+                expectedFingerprint: string;
+                type: "upsert_flow_start";
+            } | {
+                startNodeId: string;
+                nodeId: string;
+                expectedFingerprint: string;
+                type: "remove_flow_start";
+            } | {
+                patch: {
+                    overflowDirection: "NONE" | "HORIZONTAL" | "VERTICAL" | "BOTH";
+                };
+                nodeId: string;
+                expectedFingerprint: string;
+                type: "update_prototype_settings";
+            } | {
                 type: "create";
                 key: string;
                 parentId: string;
@@ -611,15 +904,15 @@ export declare const tools: {
 export type ToolName = keyof typeof tools;
 export declare const commandSchema: v.StrictObjectSchema<{
     readonly type: v.LiteralSchema<"command", undefined>;
-    readonly version: v.LiteralSchema<1, undefined>;
+    readonly version: v.LiteralSchema<2, undefined>;
     readonly requestId: v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>;
-    readonly method: v.PicklistSchema<["selection", "read_nodes", "scope", "apply", "operation_status", "read_resources", "export_begin", "export_chunk", "export_release", "cancel_operation", "read_text"], undefined>;
+    readonly method: v.PicklistSchema<["read_prototype", "validate_prototype", "prepare_prototype_playback", "selection", "read_nodes", "scope", "apply", "operation_status", "read_resources", "export_begin", "export_chunk", "export_release", "cancel_operation", "read_text"], undefined>;
     readonly params: v.RecordSchema<v.StringSchema<undefined>, v.UnknownSchema, undefined>;
 }, undefined>;
 export type Command = v.InferOutput<typeof commandSchema>;
 export declare const replySchema: v.StrictObjectSchema<{
     readonly type: v.LiteralSchema<"result", undefined>;
-    readonly version: v.LiteralSchema<1, undefined>;
+    readonly version: v.LiteralSchema<2, undefined>;
     readonly requestId: v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>;
     readonly ok: v.BooleanSchema<undefined>;
     readonly result: v.OptionalSchema<v.UnknownSchema, undefined>;
@@ -627,10 +920,12 @@ export declare const replySchema: v.StrictObjectSchema<{
 }, undefined>;
 export declare const helloSchema: v.StrictObjectSchema<{
     readonly type: v.LiteralSchema<"hello", undefined>;
-    readonly version: v.LiteralSchema<1, undefined>;
+    readonly version: v.LiteralSchema<2, undefined>;
     readonly token: v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.LengthAction<string, 64, undefined>]>;
     readonly nonce: v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MinLengthAction<string, 1, undefined>, v.MaxLengthAction<string, 200, undefined>]>;
     readonly documentName: v.SchemaWithPipe<readonly [v.StringSchema<undefined>, v.MaxLengthAction<string, 512, undefined>]>;
+    readonly capabilities: v.SchemaWithPipe<readonly [v.ArraySchema<v.PicklistSchema<["read_prototype" | "validate_prototype" | "prepare_prototype_playback" | "selection" | "read_nodes" | "apply" | "operation_status" | "read_resources" | "cancel_operation" | "read_text" | "sessions" | "export" | "design_context" | "write_scope", ...("read_prototype" | "validate_prototype" | "prepare_prototype_playback" | "selection" | "read_nodes" | "apply" | "operation_status" | "read_resources" | "cancel_operation" | "read_text" | "sessions" | "export" | "design_context" | "write_scope")[]], undefined>, undefined>, v.MaxLengthAction<("read_prototype" | "validate_prototype" | "prepare_prototype_playback" | "selection" | "read_nodes" | "apply" | "operation_status" | "read_resources" | "cancel_operation" | "read_text" | "sessions" | "export" | "design_context" | "write_scope")[], 32, undefined>]>;
+    readonly operations: v.SchemaWithPipe<readonly [v.ArraySchema<v.StringSchema<undefined>, undefined>, v.MaxLengthAction<string[], 32, undefined>]>;
 }, undefined>;
 export declare function canonical(value: unknown): string;
 export declare function utf8(value: string): Uint8Array;

@@ -10,10 +10,13 @@ import {
 
 import { credential } from "../bridge/state";
 import { projectContext } from "../project/config";
-import { MAX_RESULT } from "../protocol/index";
+import { MAX_RESULT, PACKAGE_VERSION } from "../protocol/index";
 
 export async function upstreamClient(stateDirectory: string, port: number) {
-  const client = new Client({ name: "figma-bridge-client", version: "0.1.0" });
+  const client = new Client({
+    name: "figma-bridge-client",
+    version: PACKAGE_VERSION,
+  });
   await client.connect(
     new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${port}/mcp`), {
       requestInit: {
@@ -21,9 +24,14 @@ export async function upstreamClient(stateDirectory: string, port: number) {
       },
     })
   );
-  if (client.getServerVersion()?.name !== "figma-bridge") {
+  if (
+    client.getServerVersion()?.name !== "figma-bridge" ||
+    client.getServerVersion()?.version !== PACKAGE_VERSION
+  ) {
     await client.close();
-    throw new Error("INCOMPATIBLE_SERVICE: expected Figma Bridge");
+    throw new Error(
+      "INCOMPATIBLE_SERVICE: restart the service with the installed Figma Bridge version"
+    );
   }
   return client;
 }
@@ -77,7 +85,7 @@ export async function runMcp(
 ) {
   const upstream = await upstreamClient(stateDirectory, port);
   const server = new Server(
-    { name: "figma-bridge", version: "0.1.0" },
+    { name: "figma-bridge", version: PACKAGE_VERSION },
     {
       capabilities: { tools: {} },
       instructions: `${upstream.getInstructions() ?? ""} Project context is scoped to this MCP adapter. Read design_context for the requested target; use its project's framework and conventions. Project configuration never selects a Figma session.`,

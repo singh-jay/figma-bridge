@@ -1,5 +1,7 @@
 import {
   proof,
+  tools,
+  SUPPORTED_OPERATIONS,
   VERSION,
   PORT,
   MAX_MESSAGE,
@@ -46,6 +48,8 @@ function open() {
         token,
         nonce,
         documentName: name,
+        capabilities: Object.keys(tools),
+        operations: SUPPORTED_OPERATIONS,
       })
     );
   };
@@ -85,8 +89,14 @@ function open() {
       ws.close();
     }
   };
-  ws.onclose = () => {
+  ws.onclose = (event) => {
     if (socket !== ws) return;
+    if (event.code === 1008) {
+      stopped = true;
+      note(
+        event.reason || "Connection rejected. Refresh plugin and pair again."
+      );
+    }
     connected = false;
     if (stopped) return;
     note("Disconnected · reconnecting…");

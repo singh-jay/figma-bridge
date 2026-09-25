@@ -18,6 +18,7 @@ import { startBridge } from "../bridge/server";
 import { credential } from "../bridge/state";
 import { PORT, VERSION, tools } from "../protocol/index";
 import { runMcp, upstreamClient, callWithContext } from "./adapter";
+import { savePrototypeRun } from "./prototype-report";
 
 const packageRoot = fileURLToPath(new URL("../../", import.meta.url));
 const { values, positionals } = parseArgs({
@@ -28,6 +29,7 @@ const { values, positionals } = parseArgs({
     port: { type: "string" },
     "skill-dir": { type: "string" },
     args: { type: "string" },
+    input: { type: "string" },
     force: { type: "boolean" },
     help: { type: "boolean", short: "h" },
   },
@@ -54,6 +56,7 @@ const help = `Figma Bridge — local Figma tools for coding agents
   figma-bridge mcp --project PATH         MCP stdio adapter for a project
   figma-bridge inspect TOOL --args JSON   Call a read-only tool (explicit session IDs)
   figma-bridge verify                    Check MCP tools, instructions and sessions
+  figma-bridge prototype-report --input JSON_FILE  Validate and save local playback evidence
   figma-bridge install-skill              Install the generic figma-bridge skill
 
 Common: --state-dir PATH, --port NUMBER (default 3846).
@@ -175,6 +178,16 @@ try {
     }
     console.log(
       `Import ${join(plugin, "manifest.json")} in Figma desktop.\nMerge ${join(local, "mcp.json")} or ${join(local, "codex.toml")} into your MCP client configuration.\n${ignoreMessage}\nEdit ${configPath} for your framework, component, token and guidance paths.\nThen run figma-bridge start and figma-bridge pair.`
+    );
+  } else if (action === "prototype-report") {
+    if (!values.input) throw new Error("REPORT_INPUT_REQUIRED");
+    const input = resolve(values.input);
+    if (lstatSync(input).size > 2 * 1024 * 1024)
+      throw new Error("REPORT_INPUT_TOO_LARGE");
+    console.log(
+      JSON.stringify(
+        savePrototypeRun(project, JSON.parse(readFileSync(input, "utf8")))
+      )
     );
   } else if (action === "install-skill") {
     const root = resolve(
