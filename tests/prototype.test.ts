@@ -905,3 +905,29 @@ test("default variable aliases affect fingerprints and cyclic aliases are reject
     ).error
   ).toBe("PROTOTYPE_VARIABLE_ALIAS_CYCLE");
 });
+
+test("mouse enter/leave writes omit the legacy deprecatedVersion setter field", async () => {
+  const f = fixture();
+  f.button.setReactionsAsync = async (reactions: any[]) => {
+    if (reactions.some((reaction) => "deprecatedVersion" in reaction.trigger))
+      throw new Error("Native setter rejects legacy trigger fields");
+    f.button.reactions = reactions;
+  };
+  for (const type of ["MOUSE_ENTER", "MOUSE_LEAVE"]) {
+    const reaction = {
+      trigger: { type, delay: 0.1, deprecatedVersion: false },
+      actions: nav(f.b.id).actions,
+    };
+    expect(
+      (
+        await f.apply([
+          f.operation(f.button, { type: "upsert_reaction", reaction }),
+        ])
+      ).status
+    ).toBe("complete");
+  }
+  expect(f.button.reactions.map((reaction: any) => reaction.trigger)).toEqual([
+    { type: "MOUSE_ENTER", delay: 0.1 },
+    { type: "MOUSE_LEAVE", delay: 0.1 },
+  ]);
+});

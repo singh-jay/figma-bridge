@@ -235,6 +235,8 @@ Follow this project’s framework, components and styling conventions.
 
 The agent uses the bridge to author and inspect the prototype, then its existing browser or desktop controller to operate Figma’s presentation UI. No second browser runtime is installed. Without that controller or an authenticated Figma player, authoring still works; playback must be reported as blocked or unverified. `prepare_prototype_playback` always returns `playbackStatus: "not_run"`; a valid graph is not a passed interaction test.
 
+Free-account desktop QA has verified click-to-variant, hover with return, press with release, mouse-down persistence and mouse-up activation. Mouse-enter/leave authoring and readback pass, but their player acceptance remains inconclusive in the tested desktop session. See [verification details](docs/advanced-prototype-verification.md).
+
 Use explicit `sessionId`, `pageId`, starting node IDs and bounded traversal. Tools report incomplete or unsupported paths. Check the selected session’s advertised operations before writing; account availability remains unknown; a successful write does not prove playback entitlement. Check the peer’s `prototypeFeatures` as well as its operations. The [skill’s prototype reference](skills/figma-bridge/references/prototypes.md) includes the operation shapes, recovery rules and evidence format.
 
 Create screens first, then use their confirmed IDs to wire reactions. **Configure flow starts in a separate batch after reading fresh page state:** Figma can automatically create a flow start when the first interaction is added. A mixed batch may correctly stop with a partial receipt and `STALE_FINGERPRINT`. Inspect the receipt and resume only unexecuted work with fresh fingerprints.

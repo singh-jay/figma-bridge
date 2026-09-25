@@ -136,8 +136,14 @@ export async function writePrototypeOperation(
     const target = node as SceneNode & ReactionMixin;
     const next = JSON.parse(JSON.stringify(target.reactions)) as Reaction[];
     if (op.type === "remove_reaction") next.splice(op.index, 1);
-    else if (op.index === undefined) next.push(op.reaction as Reaction);
-    else next[op.index] = op.reaction as Reaction;
+    else {
+      const reaction = JSON.parse(JSON.stringify(op.reaction));
+      // Current native mouse enter/leave reactions omit this legacy typings field.
+      if (["MOUSE_ENTER", "MOUSE_LEAVE"].includes(reaction.trigger.type))
+        delete reaction.trigger.deprecatedVersion;
+      if (op.index === undefined) next.push(reaction as Reaction);
+      else next[op.index] = reaction as Reaction;
+    }
     await target.setReactionsAsync(next);
   } else if (
     op.type === "upsert_flow_start" ||

@@ -9,7 +9,7 @@ Read the base [prototype workflow](prototypes.md) first. Retain explicit session
 - `{ "type": "ON_HOVER" }`, `ON_PRESS`, `ON_DRAG`, and existing `ON_CLICK`.
 - `{ "type": "ON_KEY_DOWN", "device": "KEYBOARD", "keyCodes": [75] }` for K. Use 1–4 distinct native keyboard codes (0–255); do not substitute text characters or controller buttons.
 - `{ "type": "AFTER_TIMEOUT", "timeout": 1.5 }` for a 1500ms delay.
-- `{ "type": "MOUSE_ENTER", "delay": 0.1, "deprecatedVersion": false }`, also `MOUSE_LEAVE`.
+- `{ "type": "MOUSE_ENTER", "delay": 0.1 }`, also `MOUSE_LEAVE`. The optional legacy `deprecatedVersion: false` input is accepted but omitted from native writes because the current Figma setter rejects it.
 - `{ "type": "MOUSE_DOWN", "delay": 0.1 }`, also `MOUSE_UP`.
 
 **Timing fields use seconds.** Trigger `timeout`/`delay` accept 0–60 seconds; transition `duration` accepts 0–10 seconds. The published Trigger documentation says milliseconds, but desktop acceptance confirmed that native `timeout: 1.5` displays as `1500ms`, whereas `1500` displays as `1500000ms`. Check the editor and actual playback when integrating other Figma versions.

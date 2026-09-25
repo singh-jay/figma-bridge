@@ -2006,8 +2006,13 @@ async function writePrototypeOperation(node, op) {
     const target = node;
     const next = JSON.parse(JSON.stringify(target.reactions));
     if (op.type === "remove_reaction") next.splice(op.index, 1);
-    else if (op.index === void 0) next.push(op.reaction);
-    else next[op.index] = op.reaction;
+    else {
+      const reaction = JSON.parse(JSON.stringify(op.reaction));
+      if (["MOUSE_ENTER", "MOUSE_LEAVE"].includes(reaction.trigger.type))
+        delete reaction.trigger.deprecatedVersion;
+      if (op.index === void 0) next.push(reaction);
+      else next[op.index] = reaction;
+    }
     await target.setReactionsAsync(next);
   } else if (op.type === "upsert_flow_start" || op.type === "remove_flow_start") {
     const page = node;
