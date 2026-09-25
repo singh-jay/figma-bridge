@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "targets": {
+    "web": {
+      "root": ".",
+      "framework": "vue",
+      "language": "typescript",
+      "styling": "scoped-css",
+      "components": ["src/components"],
+      "tokens": ["src/styles/tokens.css"],
+      "guidance": ["AGENTS.md"]
+    }
+  }
+}

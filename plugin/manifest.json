@@ -1,0 +1,12 @@
+{
+  "name": "Figma Bridge",
+  "id": "figma-bridge-local",
+  "api": "1.0.0",
+  "main": "code.js",
+  "editorType": ["figma"],
+  "documentAccess": "dynamic-page",
+  "networkAccess": {
+    "allowedDomains": ["none"],
+    "devAllowedDomains": ["http://localhost:3846", "ws://localhost:3846"]
+  }
+}

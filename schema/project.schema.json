@@ -1,0 +1,80 @@
+{
+  "type": "object",
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "targets": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 512
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "root": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512,
+            "default": "."
+          },
+          "framework": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "language": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "styling": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "components": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            "maxItems": 32,
+            "default": []
+          },
+          "tokens": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            "maxItems": 32,
+            "default": []
+          },
+          "guidance": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            "maxItems": 32,
+            "default": []
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "version",
+    "targets"
+  ],
+  "additionalProperties": false,
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

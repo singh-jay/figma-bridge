@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "targets": {
+    "web": {
+      "root": ".",
+      "framework": "react",
+      "language": "typescript",
+      "styling": "css-modules",
+      "components": ["src/components"],
+      "tokens": ["src/styles/tokens.css"],
+      "guidance": ["AGENTS.md"]
+    }
+  }
+}

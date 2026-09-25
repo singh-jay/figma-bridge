@@ -1,0 +1,11 @@
+interface:
+  display_name: "Figma Bridge"
+  short_description: "Edit Figma designs and implement them in your stack"
+  default_prompt: "Use $figma-bridge to inspect my selected Figma frame and implement it using this project's components and design system."
+
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "figma_bridge"
+      description: "Local Figma desktop bridge"
+      transport: "stdio"

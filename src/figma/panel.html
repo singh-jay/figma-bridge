@@ -1,0 +1,74 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      body {
+        margin: 0;
+        padding: 20px;
+        font: 13px/1.5 system-ui;
+        color: var(--figma-color-text, #222);
+        background: var(--figma-color-bg, #fff);
+      }
+      h1 {
+        font-size: 16px;
+        margin: 0 0 12px;
+      }
+      p {
+        margin: 12px 0;
+      }
+      label {
+        display: block;
+        margin-bottom: 6px;
+      }
+      input {
+        box-sizing: border-box;
+        width: 100%;
+        padding: 9px;
+        border: 1px solid #999;
+        border-radius: 6px;
+      }
+      button {
+        padding: 8px 12px;
+        border: 1px solid #999;
+        border-radius: 6px;
+        cursor: pointer;
+        margin: 10px 4px 0 0;
+      }
+      #status {
+        font-weight: 600;
+      }
+      #activity {
+        overflow-wrap: anywhere;
+        font-size: 11px;
+      }
+      small {
+        display: block;
+        margin-top: 16px;
+        opacity: 0.8;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Figma Bridge</h1>
+    <label for="token">Pairing token</label
+    ><input
+      id="token"
+      type="password"
+      autocomplete="off"
+      spellcheck="false"
+    /><button id="connect">Connect</button><button id="stop">Disconnect</button
+    ><button id="close">Close</button>
+    <p id="status" role="status">
+      Start the local bridge, then paste its pairing token.
+    </p>
+    <p id="activity"></p>
+    <small
+      >Only the paired local service can access this open file. Keep the plugin
+      running while working with your coding agent.</small
+    >
+    <script>
+      /* BRIDGE_SCRIPT */
+    </script>
+  </body>
+</html>
