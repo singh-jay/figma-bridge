@@ -61,6 +61,66 @@ npx --no-install figma-bridge install-skill
 
 This installs `$figma-bridge` in your personal Codex skills directory. Other agents can use the shipped `skills/figma-bridge/SKILL.md` with their own skill installation mechanism. The skill does not start the service or create a missing MCP connection.
 
+## Sample agent prompts
+
+Install the [Figma Bridge skill](skills/figma-bridge/SKILL.md) using `npx --no-install figma-bridge install-skill`, then paste one of these prompts into your coding agent. Keep the bridge service and paired Figma plugin running. For selection-based prompts, select the intended frame in Figma first. If several documents are connected, identify the intended file so the agent can resolve its session.
+
+### Inspect a selected design
+
+```text
+$figma-bridge Read the selected frame in the connected Figma document.
+Summarize its layout, typography, spacing, colors, components and variable
+bindings. Export and inspect a PNG preview, and report any missing resources.
+This is a read-only design review.
+```
+
+### Implement a component in this project
+
+```text
+$figma-bridge Implement the selected Figma frame as a reusable component for
+the web target in figma-bridge.config.json. Use that target's framework,
+existing components, tokens and styling conventions. Read the design and
+inspect its PNG preview, then implement responsive and accessible behavior
+using real data or explicit props. Run the relevant checks and compare the
+rendered component with the design. Report any unsupported or ambiguous mappings.
+```
+
+Replace `web` with a target key from your project's configuration. The same workflow can target React, Vue or another framework; the agent implements the code using your project's sources.
+
+### Create a design board in the current document
+
+```text
+$figma-bridge Create a new top-level frame named "Account settings exploration"
+on the current page of the connected Figma document, beside the existing
+frames. Make it 1440 pixels wide and lay out a heading and instances of the
+existing local settings components. Reuse available variables and styles;
+report missing components before substituting them. Preserve existing designs.
+Read the new frame back, inspect a PNG preview, and report its node ID.
+```
+
+Here, a board means a frame inside an already open Figma Design document. The bridge does not create a new Figma file, page or component library.
+
+### Make a scoped design edit
+
+```text
+$figma-bridge In the selected Figma frame, change the heading to "Account
+settings" and set the frame's auto-layout gap to 24 pixels. Keep all other
+content and styling unchanged. Read the edited nodes back and inspect an
+updated PNG preview to verify the result.
+```
+
+### Bring a component up to date after a Figma edit
+
+```text
+$figma-bridge Compare the selected Figma frame with the existing
+src/components/AccountSettings component for the web target. Describe the
+visual differences, then update the component using this project's design
+system. Preserve its public API and business behavior. Verify the rendered
+result and report anything that could not be matched.
+```
+
+Replace the component path and target with real values from your project. Each request is an explicit read or edit; the bridge does not continuously synchronize Figma and code.
+
 ## Project context
 
 Edit `figma-bridge.config.json`. It is safe to commit this configuration. Example:
