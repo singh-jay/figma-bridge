@@ -931,3 +931,248 @@ test("mouse enter/leave writes omit the legacy deprecatedVersion setter field", 
     { type: "MOUSE_LEAVE", delay: 0.1 },
   ]);
 });
+
+function variantFixture(f: ReturnType<typeof fixture>, separatePage = false) {
+  const page = separatePage ? f.api.createPage() : f.page;
+  const set = f.make("States", page);
+  set.type = "COMPONENT_SET";
+  const first = f.make("Default", set);
+  first.type = "COMPONENT";
+  const next = f.make("Active", set);
+  next.type = "COMPONENT";
+  const instance = f.make("Control", f.a);
+  instance.type = "INSTANCE";
+  instance.mainComponent = first;
+  const nested = f.make("Target content", next);
+  const reaction = nav(next.id) as any;
+  reaction.actions[0].navigation = "CHANGE_TO";
+  return { page, set, first, next, instance, nested, reaction };
+}
+
+for (const kind of ["conditional", "variant"]) {
+  test(`${kind} runtime paths do not hide definite scenario failures or permit passing evidence`, async () => {
+    const f = fixture();
+    if (kind === "conditional") {
+      f.button.reactions = [
+        {
+          trigger: { type: "ON_CLICK" },
+          actions: [
+            {
+              type: "CONDITIONAL",
+              conditionalBlocks: [
+                { condition: boolValue(true), actions: nav(f.b.id).actions },
+              ],
+            },
+          ],
+        },
+      ];
+    } else {
+      const v = variantFixture(f);
+      v.instance.reactions = [v.reaction];
+      v.nested.reactions = [nav(f.b.id)];
+    }
+    for (const method of ["validate_prototype", "prepare_prototype_playback"]) {
+      const graph = (await f.engine.dispatch(
+        method,
+        f.read({
+          nodeIds: [f.a.id, f.overlay.id],
+          ...(method === "prepare_prototype_playback"
+            ? { startNodeId: f.a.id }
+            : {}),
+          scenario: {
+            startNodeId: f.a.id,
+            expectedScreenIds: [f.b.id, f.overlay.id],
+            requireExitNodeIds: [f.b.id],
+          },
+        })
+      )) as any;
+      expect(graph.complete).toBe(true);
+      expect(graph.scenarioStatus).toBe("warnings");
+      expect(graph.issues).toContainEqual({
+        severity: "warning",
+        code: "UNREACHABLE_SCREEN",
+        nodeId: f.overlay.id,
+      });
+      expect(graph.issues).toContainEqual({
+        severity: "warning",
+        code: "MISSING_EXIT_PATH",
+        nodeId: f.b.id,
+      });
+      expect(
+        graph.issues.some(
+          (i: any) => i.code === "UNREACHABLE_SCREEN" && i.nodeId === f.b.id
+        )
+      ).toBe(false);
+      if (method === "prepare_prototype_playback") {
+        const { evaluatePrototypeRun, interactionCheckId } =
+          await import("../src/cli/prototype-report");
+        const result = evaluatePrototypeRun({
+          prepared: graph,
+          after: graph,
+          environment: {
+            controllerAvailable: true,
+            authenticated: true,
+            pluginConnected: true,
+            documentIdentity: "confirmed",
+            observedStartNodeId: f.a.id,
+            viewport: { width: 800, height: 600 },
+          },
+          requiredChecks: [],
+          checks: graph.steps.map((step: any) => ({
+            id: interactionCheckId(step),
+            action: "Exercise edge",
+            expected: "Edge effect",
+            observed: "Edge effect",
+            status: "passed",
+            observedAt: new Date().toISOString(),
+            screenshots: ["fixture.png"],
+          })),
+        });
+        expect(result.status).toBe("inconclusive");
+        expect(result.reasons).toContain("STRUCTURE_NOT_VERIFIED");
+      }
+    }
+  });
+}
+
+test("variant-state paths conservatively provide reachability and exits but still need playback", async () => {
+  const f = fixture();
+  const v = variantFixture(f);
+  v.instance.reactions = [v.reaction];
+  v.nested.reactions = [nav(f.b.id)];
+  const graph = (await f.engine.dispatch(
+    "validate_prototype",
+    f.read({
+      scenario: {
+        startNodeId: f.a.id,
+        expectedScreenIds: [f.b.id],
+        requireExitNodeIds: [f.a.id],
+      },
+    })
+  )) as any;
+  expect(graph.scenarioStatus).toBe("requires_playback");
+  expect(
+    graph.issues.some((i: any) =>
+      ["UNREACHABLE_SCREEN", "MISSING_EXIT_PATH"].includes(i.code)
+    )
+  ).toBe(false);
+});
+
+test("cross-page instance variants support guarded writes and bounded readback without allowing cross-page navigation", async () => {
+  const f = fixture();
+  const v = variantFixture(f, true);
+  const source = f.make("Instance child", v.instance);
+  const unrelated = f.make("Unrelated definition", v.page);
+  for (const node of [v.instance, source]) {
+    expect(
+      (
+        await f.apply([
+          f.operation(node, { type: "upsert_reaction", reaction: v.reaction }),
+        ])
+      ).status
+    ).toBe("complete");
+  }
+  const read = f.read({ scenario: { startNodeId: f.a.id } });
+  for (const method of [
+    "read_prototype",
+    "validate_prototype",
+    "prepare_prototype_playback",
+  ]) {
+    const graph = (await f.engine.dispatch(method, {
+      ...read,
+      ...(method === "prepare_prototype_playback"
+        ? { startNodeId: f.a.id }
+        : {}),
+    })) as any;
+    expect(graph.complete).toBe(true);
+    expect(graph.scenarioStatus).toBe("requires_playback");
+    expect(graph.issues.some((i: any) => i.severity === "error")).toBe(false);
+    if (graph.nodes) {
+      expect(graph.nodes.some((n: any) => n.id === v.nested.id)).toBe(true);
+      expect(graph.nodes.some((n: any) => n.id === unrelated.id)).toBe(false);
+    }
+  }
+  const limited = (await f.engine.dispatch(
+    "read_prototype",
+    f.read({ traverseDestinations: false })
+  )) as any;
+  expect(limited.complete).toBe(false);
+  expect(limited.pendingNodeIds).toContain(v.next.id);
+  const budget = (await f.engine.dispatch(
+    "read_prototype",
+    f.read({ maxNodes: 3 })
+  )) as any;
+  expect(budget.complete).toBe(false);
+  for (const navigation of ["NAVIGATE", "OVERLAY"]) {
+    const reaction = nav(unrelated.id) as any;
+    reaction.actions[0].navigation = navigation;
+    expect(
+      (
+        await f.apply([
+          f.operation(source, { type: "upsert_reaction", reaction }),
+        ])
+      ).error
+    ).toBe("PROTOTYPE_CROSS_PAGE");
+    const saved = source.reactions;
+    source.reactions = [reaction];
+    const graph = (await f.engine.dispatch(
+      "validate_prototype",
+      f.read()
+    )) as any;
+    expect(graph.structuralStatus).toBe("invalid");
+    expect(
+      graph.issues.some((i: any) => i.code === "CROSS_PAGE_DESTINATION")
+    ).toBe(true);
+    source.reactions = saved;
+  }
+  const wrong = nav(unrelated.id) as any;
+  wrong.actions[0].navigation = "CHANGE_TO";
+  expect(
+    (
+      await f.apply([
+        f.operation(source, { type: "upsert_reaction", reaction: wrong }),
+      ])
+    ).error
+  ).toBe("CHANGE_TO_REQUIRES_SIBLING_VARIANT");
+  const outside = (await f.engine.dispatch(
+    "validate_prototype",
+    f.read({ nodeIds: [unrelated.id] })
+  )) as any;
+  expect(outside.structuralStatus).toBe("invalid");
+  expect(
+    outside.issues.some((i: any) => i.code === "OUTSIDE_PROTOTYPE_PAGE")
+  ).toBe(true);
+});
+
+test("unrelated runtime interactions do not make a static scenario require playback", async () => {
+  const f = fixture();
+  f.button.reactions = [nav(f.b.id)];
+  f.overlay.reactions = [
+    {
+      trigger: { type: "ON_CLICK" },
+      actions: [
+        {
+          type: "CONDITIONAL",
+          conditionalBlocks: [
+            { condition: boolValue(true), actions: nav(f.b.id).actions },
+          ],
+        },
+      ],
+    },
+  ];
+  const graph = (await f.engine.dispatch(
+    "validate_prototype",
+    f.read({
+      nodeIds: [f.a.id, f.overlay.id],
+      scenario: {
+        startNodeId: f.a.id,
+        expectedScreenIds: [f.b.id],
+        requireExitNodeIds: [f.a.id],
+      },
+    })
+  )) as any;
+  expect(graph.scenarioStatus).toBe("satisfied");
+  expect(
+    graph.issues.some((i: any) => i.code === "SCENARIO_REQUIRES_RUNTIME_STATE")
+  ).toBe(false);
+});

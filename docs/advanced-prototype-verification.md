@@ -43,6 +43,8 @@ Private document identifiers, screenshots, receipts and evidence reports remain 
 
 ## Automated verification
 
-The suite passed 49 tests with 240 assertions. It covers trigger metadata, Smart Animate readback, nested references and branch coverage, type/arity/mode errors, local-only resources, default alias dependencies and cycles, dependency races, sibling variants, schema bounds, limited peers and the previous guarded-write/read/report behavior.
+The suite passed 54 tests with 295 assertions. It covers trigger metadata, Smart Animate readback, nested references and branch coverage, type/arity/mode errors, local-only resources, default alias dependencies and cycles, dependency races, sibling variants, schema bounds, limited peers and the previous guarded-write/read/report behavior.
+
+PR review regressions additionally cover definite unreachable screens and missing exits in conditional/variant graphs, evidence reports refusing those warnings, reachability through variant descendants, irrelevant runtime paths, and cross-page instance-variant write/readback with bounded traversal. Cross-page navigation/overlays and unrelated component targets remain rejected. These new cases were verified automatically; the desktop acceptance above has not been repeated for them.
 
 Typecheck, format checks, package build and the installed Node tarball verifier are required gates. The tarball verifier exercises installation, skill assets, stdio MCP, capability negotiation, advanced conditional request routing and durable report handling. These checks validate the bridge contract; they do not simulate Figma's rendering or paid runtime behavior.

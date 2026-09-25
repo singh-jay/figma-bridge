@@ -16,7 +16,7 @@ Read `figma_bridge_read_prototype` with `sessionId`, `pageId`, `nodeIds` and `tr
 }
 ```
 
-Seed `nodeIds` with the start plus any expected screen that may be disconnected, and enable destination traversal. `UNREACHABLE_SCREEN` and `MISSING_EXIT_PATH` warn only about explicitly declared expectations. Missing/incomplete/unsupported coverage returns an inconclusive scenario instead of a false unreachable claim. Opening an overlay does not count as leaving its underlying screen. BACK/CLOSE require history and return `EXIT_REQUIRES_PLAYBACK_HISTORY` with `scenarioStatus: "requires_playback"`; verify those in the player. These warnings allow preparation, but the evidence report still requires every interaction check to pass. Terminal screens need not appear in `requireExitNodeIds`.
+Seed `nodeIds` with the start plus any expected screen that may be disconnected, and enable destination traversal. `UNREACHABLE_SCREEN` and `MISSING_EXIT_PATH` warn only about explicitly declared expectations. Missing/incomplete/unsupported coverage returns an inconclusive scenario instead of a false unreachable claim. Complete conditional/variant graphs first check all possible branches and variant states for definite unreachable screens and missing exits. Those warnings prevent a passing report; possible state-dependent outcomes still require playback. Opening an overlay does not count as leaving its underlying screen. BACK/CLOSE require history and return `EXIT_REQUIRES_PLAYBACK_HISTORY` with `scenarioStatus: "requires_playback"`; verify those in the player. These warnings allow preparation, but the evidence report still requires every interaction check to pass. Terminal screens need not appear in `requireExitNodeIds`.
 
 ## Guarded authoring
 

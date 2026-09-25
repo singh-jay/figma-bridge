@@ -16,7 +16,7 @@ Read the base [prototype workflow](prototypes.md) first. Retain explicit session
 
 Use `transition: { "type": "SMART_ANIMATE", "duration": 0.6, "easing": { "type": "LINEAR" } }`. Layer matching is Figma's responsibility: matching names/hierarchy improve results; readback alone cannot prove interpolation. Easing supports LINEAR, EASE_IN, EASE_OUT, EASE_IN_AND_OUT, the three corresponding BACK curves, GENTLE, QUICK, BOUNCY and SLOW. Custom curves and directional transitions remain read-only.
 
-`navigation: "CHANGE_TO"` targets an existing sibling component variant. The source must be inside a component or instance whose main component belongs to that same set; the destination must be a different COMPONENT in the same set and page. This does not create components or component sets, import libraries, or swap arbitrary instances.
+`navigation: "CHANGE_TO"` targets an existing sibling component variant. The source must be inside a component or instance whose main component belongs to that same set; the destination must be a different COMPONENT in the same set. An instance may live on a different design page from that local component set. Destination traversal follows only validated variant definitions and their descendants across pages, within the existing read budgets; NAVIGATE and OVERLAY still require same-page screen destinations. This does not create components or component sets, import libraries, or swap arbitrary instances.
 
 ## Variable actions and expressions
 
